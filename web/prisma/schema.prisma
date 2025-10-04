@@ -1,0 +1,119 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum UserRole {
+  admin
+  player
+}
+
+enum SessionStatus {
+  lobby
+  active
+  paused
+  ended
+}
+
+enum OrderType {
+  buy
+  sell
+}
+
+enum OrderStatus {
+  open
+  filled
+  cancelled
+}
+
+model User {
+  id           String   @id @db.Uuid
+  display_name String?
+  role         UserRole @default(player)
+  sessions     GameSession[] @relation("AdminSessions")
+  players      Player[]
+  puzzles_solved Puzzle[] @relation("SolvedBy")
+}
+
+model GameSession {
+  id                 String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  admin              User           @relation("AdminSessions", fields: [admin_id], references: [id])
+  admin_id           String         @db.Uuid
+  room_code          String         @unique
+  status             SessionStatus  @default(lobby)
+  starting_cash      Decimal        @db.Decimal(12, 2)
+  max_shares         Int
+  session_duration   Int
+  current_price      Decimal?       @db.Decimal(10, 2)
+  last_traded_price  Decimal?       @db.Decimal(10, 2)
+  created_at         DateTime       @default(now()) @db.Timestamptz(6)
+  players            Player[]
+  puzzles            Puzzle[]
+  orders             Order[]
+  trades             Trade[]
+}
+
+model Player {
+  id           BigInt       @id @default(autoincrement())
+  session      GameSession  @relation(fields: [session_id], references: [id])
+  session_id   String       @db.Uuid
+  user         User         @relation(fields: [user_id], references: [id])
+  user_id      String       @db.Uuid
+  cash_balance Decimal      @db.Decimal(12, 2)
+  shares_held  Int          @default(0)
+  orders       Order[]
+
+  @@unique([session_id, user_id])
+}
+
+model Puzzle {
+  id                 BigInt      @id @default(autoincrement())
+  session            GameSession @relation(fields: [session_id], references: [id])
+  session_id         String      @db.Uuid
+  question           String
+  answer             String
+  is_active          Boolean     @default(false)
+  solved_by          User?       @relation("SolvedBy", fields: [solved_by_user_id], references: [id])
+  solved_by_user_id  String?     @db.Uuid
+  price_unlock_time  DateTime?
+}
+
+model Order {
+  id         BigInt       @id @default(autoincrement())
+  session    GameSession  @relation(fields: [session_id], references: [id])
+  session_id String       @db.Uuid
+  player     Player       @relation(fields: [player_id], references: [id])
+  player_id  BigInt
+  type       OrderType
+  price      Decimal      @db.Decimal(10, 2)
+  quantity   Int
+  status     OrderStatus  @default(open)
+  created_at DateTime     @default(now()) @db.Timestamptz(6)
+  buy_trades  Trade[]     @relation("BuyOrder")
+  sell_trades Trade[]     @relation("SellOrder")
+}
+
+model Trade {
+  id            BigInt      @id @default(autoincrement())
+  session       GameSession @relation(fields: [session_id], references: [id])
+  session_id    String      @db.Uuid
+  buy_order     Order       @relation("BuyOrder", fields: [buy_order_id], references: [id])
+  buy_order_id  BigInt
+  sell_order    Order       @relation("SellOrder", fields: [sell_order_id], references: [id])
+  sell_order_id BigInt
+  price         Decimal     @db.Decimal(10, 2)
+  quantity      Int
+  created_at    DateTime    @default(now()) @db.Timestamptz(6)
+}
