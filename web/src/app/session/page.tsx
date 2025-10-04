@@ -27,12 +27,14 @@ export default function SessionPage() {
 
   async function refresh() {
     if (!sessionId || !userId) return;
+    const token = typeof window !== 'undefined' ? localStorage.getItem('idToken') : null;
+    const headers = token ? { Authorization: `Bearer ${token}` } as any : undefined;
     const [sRes, obRes, lbRes, pvRes, pzRes] = await Promise.all([
       fetch(`/api/sessions/${sessionId}/state`),
       fetch(`/api/sessions/${sessionId}/orderbook`),
       fetch(`/api/sessions/${sessionId}/leaderboard`),
-      fetch(`/api/player?sessionId=${sessionId}&userId=${userId}`),
-      fetch(`/api/sessions/${sessionId}/puzzle`),
+      fetch(`/api/player?sessionId=${sessionId}&userId=${userId}`, { headers }),
+      fetch(`/api/sessions/${sessionId}/puzzle`, { headers }),
     ]);
     setState(await sRes.json());
     setOrderbook(await obRes.json());
@@ -49,9 +51,10 @@ export default function SessionPage() {
 
   async function place() {
     if (!sessionId || !userId) return;
+    const token = typeof window !== 'undefined' ? localStorage.getItem('idToken') : null;
     const res = await fetch(`/api/sessions/${sessionId}/orders`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
       body: JSON.stringify({ userId, type, price: Number(price), quantity: Number(quantity) }),
     });
     const data = await res.json();
@@ -63,9 +66,10 @@ export default function SessionPage() {
 
   async function submitAnswer() {
     if (!sessionId || !userId) return;
+    const token = typeof window !== 'undefined' ? localStorage.getItem('idToken') : null;
     const res = await fetch(`/api/sessions/${sessionId}/puzzle`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
       body: JSON.stringify({ userId, submitAnswer: answer }),
     });
     const data = await res.json();

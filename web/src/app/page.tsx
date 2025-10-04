@@ -21,6 +21,7 @@ export default function Home() {
           Real-time trading simulation with a live order book and puzzle-powered alpha.
         </p>
         <div className="mt-6 flex items-center justify-center gap-3 animate-in fade-in duration-700 delay-150">
+
           <Link href="/join">
             <Button className="gap-2">
               Join as Player <ArrowRight className="size-4" />

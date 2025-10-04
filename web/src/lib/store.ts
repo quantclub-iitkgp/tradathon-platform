@@ -57,9 +57,9 @@ function now(): number {
   return Date.now();
 }
 
-export function createSession(input: CreateSessionInput): CreateSessionResponse {
+export function createSession(input: CreateSessionInput, adminIdOverride?: UUID): CreateSessionResponse {
   const adminUser: User = {
-    id: randomUUID(),
+    id: adminIdOverride ?? randomUUID(),
     displayName: input.adminDisplayName,
     role: "admin",
   };
@@ -99,11 +99,11 @@ export function getSessionByRoomCode(roomCode: string): GameSession | undefined 
   return id ? db.sessions.get(id) : undefined;
 }
 
-export function joinSession(input: JoinSessionInput): JoinSessionResponse {
+export function joinSession(input: JoinSessionInput, userIdOverride?: UUID): JoinSessionResponse {
   const session = getSessionByRoomCode(input.roomCode);
   if (!session) throw new Error("Session not found");
 
-  const user: User = { id: randomUUID(), displayName: input.displayName, role: "player" };
+  const user: User = { id: userIdOverride ?? randomUUID(), displayName: input.displayName, role: "player" };
   db.users.set(user.id, user);
 
   const players = db.playersBySession.get(session.id)!;
@@ -201,6 +201,15 @@ export function placeOrder(input: PlaceOrderInput): { order: Order } {
 
   const player = getPlayerByUser(input.sessionId, input.userId);
   if (!player) throw new Error("Player not found in session");
+
+  // Early-access gating based on puzzle
+  const puzzle = db.puzzlesBySession.get(input.sessionId);
+  const nowMs = now();
+  if (puzzle && puzzle.isActive && puzzle.priceUnlockTime && nowMs < puzzle.priceUnlockTime) {
+    if (puzzle.solvedByUserId !== input.userId) {
+      throw new Error("Price locked: only first solver can trade until unlock");
+    }
+  }
 
   // constraints
   if (input.type === "buy") {

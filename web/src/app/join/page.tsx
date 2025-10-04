@@ -12,7 +12,8 @@ export default function JoinPage() {
   const router = useRouter();
 
   async function join() {
-    const res = await fetch(`/api/rooms/${roomCode}/join`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ displayName }) });
+    const token = typeof window !== 'undefined' ? localStorage.getItem('idToken') : null;
+    const res = await fetch(`/api/rooms/${roomCode}/join`, { method: "POST", headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) }, body: JSON.stringify({ displayName }) });
     const data = await res.json();
     if (res.ok) {
       const params = new URLSearchParams({ sessionId: data.session.id, userId: data.user.id, playerId: String(data.player.id) });

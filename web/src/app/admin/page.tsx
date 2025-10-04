@@ -13,9 +13,10 @@ export default function AdminPage() {
   const [answer, setAnswer] = useState("");
 
   async function createSession() {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('idToken') : null;
     const res = await fetch("/api/sessions", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
       body: JSON.stringify({ adminDisplayName: adminName, startingCash: 10000, maxShares: 10, sessionDurationSec: 600 }),
     });
     const data = await res.json();
@@ -27,19 +28,22 @@ export default function AdminPage() {
 
   async function startSession() {
     if (!sessionId) return;
-    await fetch(`/api/sessions/${sessionId}/puzzle`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ start: true }) });
+    const token = typeof window !== 'undefined' ? localStorage.getItem('idToken') : null;
+    await fetch(`/api/sessions/${sessionId}/puzzle`, { method: "POST", headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) }, body: JSON.stringify({ start: true }) });
   }
 
   async function setCurrentPrice() {
     if (!sessionId) return;
     const p = Number(price);
     if (!Number.isFinite(p)) return;
-    await fetch(`/api/sessions/${sessionId}/puzzle`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ setPrice: p }) });
+    const token = typeof window !== 'undefined' ? localStorage.getItem('idToken') : null;
+    await fetch(`/api/sessions/${sessionId}/puzzle`, { method: "POST", headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) }, body: JSON.stringify({ setPrice: p }) });
   }
 
   async function setPuzzle() {
     if (!sessionId) return;
-    await fetch(`/api/sessions/${sessionId}/puzzle`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ question, answer }) });
+    const token = typeof window !== 'undefined' ? localStorage.getItem('idToken') : null;
+    await fetch(`/api/sessions/${sessionId}/puzzle`, { method: "POST", headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) }, body: JSON.stringify({ question, answer }) });
     setQuestion("");
     setAnswer("");
   }

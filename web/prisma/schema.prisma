@@ -39,12 +39,12 @@ enum OrderStatus {
 }
 
 model User {
-  id           String   @id @db.Uuid
-  display_name String?
-  role         UserRole @default(player)
-  sessions     GameSession[] @relation("AdminSessions")
-  players      Player[]
-  puzzles_solved Puzzle[] @relation("SolvedBy")
+  id             String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  display_name   String?
+  role           UserRole      @default(player)
+  sessions       GameSession[] @relation("AdminSessions")
+  players        Player[]
+  puzzles_solved Puzzle[]      @relation("SolvedBy")
 }
 
 model GameSession {
@@ -91,18 +91,18 @@ model Puzzle {
 }
 
 model Order {
-  id         BigInt       @id @default(autoincrement())
-  session    GameSession  @relation(fields: [session_id], references: [id])
-  session_id String       @db.Uuid
-  player     Player       @relation(fields: [player_id], references: [id])
-  player_id  BigInt
-  type       OrderType
-  price      Decimal      @db.Decimal(10, 2)
-  quantity   Int
-  status     OrderStatus  @default(open)
-  created_at DateTime     @default(now()) @db.Timestamptz(6)
-  buy_trades  Trade[]     @relation("BuyOrder")
-  sell_trades Trade[]     @relation("SellOrder")
+  id          BigInt       @id @default(autoincrement())
+  session     GameSession  @relation(fields: [session_id], references: [id])
+  session_id  String       @db.Uuid
+  player      Player       @relation(fields: [player_id], references: [id])
+  player_id   BigInt
+  type        OrderType
+  price       Decimal      @db.Decimal(10, 2)
+  quantity    Int
+  status      OrderStatus  @default(open)
+  created_at  DateTime     @default(now()) @db.Timestamptz(6)
+  buy_trades  Trade[]      @relation("BuyOrder")
+  sell_trades Trade[]      @relation("SellOrder")
 }
 
 model Trade {

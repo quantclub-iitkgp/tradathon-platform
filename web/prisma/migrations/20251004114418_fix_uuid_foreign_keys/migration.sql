@@ -12,7 +12,7 @@ CREATE TYPE "OrderStatus" AS ENUM ('open', 'filled', 'cancelled');
 
 -- CreateTable
 CREATE TABLE "User" (
-    "id" UUID NOT NULL,
+    "id" UUID NOT NULL DEFAULT gen_random_uuid(),
     "display_name" TEXT,
     "role" "UserRole" NOT NULL DEFAULT 'player',
 
