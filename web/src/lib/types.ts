@@ -2,6 +2,7 @@ export type UUID = string;
 
 export type UserRole = "admin" | "player";
 export type SessionStatus = "lobby" | "active" | "paused" | "ended";
+export type RoundStatus = "waiting" | "active" | "executing" | "completed";
 export type OrderType = "buy" | "sell";
 export type OrderStatus = "open" | "filled" | "cancelled";
 
@@ -21,6 +22,11 @@ export interface GameSession {
   sessionDurationSec: number;
   currentPrice: number | null;
   lastTradedPrice: number | null;
+  currentRound: number;
+  totalRounds: number;
+  roundDurationSec: number;
+  roundStatus: RoundStatus;
+  roundEndTime: number | null; // epoch ms
   createdAt: number; // epoch ms
 }
 
@@ -32,14 +38,15 @@ export interface PlayerState {
   sharesHeld: number;
 }
 
-export interface Puzzle {
+export interface Round {
   id: number;
   sessionId: UUID;
-  question: string;
-  answer: string;
-  isActive: boolean;
-  solvedByUserId?: UUID;
-  priceUnlockTime?: number; // epoch ms
+  roundNumber: number;
+  status: RoundStatus;
+  startTime: number; // epoch ms
+  endTime: number | null; // epoch ms
+  executionPrice: number | null;
+  orders: Order[];
 }
 
 export interface Order {
@@ -50,6 +57,7 @@ export interface Order {
   price: number;
   quantity: number;
   status: OrderStatus;
+  roundNumber: number;
   createdAt: number; // epoch ms
 }
 
@@ -60,6 +68,7 @@ export interface Trade {
   sellOrderId: number;
   price: number;
   quantity: number;
+  roundNumber: number;
   createdAt: number; // epoch ms
 }
 
@@ -68,6 +77,8 @@ export interface CreateSessionInput {
   startingCash: number;
   maxShares: number;
   sessionDurationSec: number;
+  totalRounds: number;
+  roundDurationSec: number;
 }
 
 export interface CreateSessionResponse {
@@ -100,10 +111,13 @@ export interface CancelOrderInput {
   orderId: number;
 }
 
-export interface SubmitPuzzleAnswerInput {
+export interface StartRoundInput {
   sessionId: UUID;
-  userId: UUID;
-  answer: string;
+}
+
+export interface EndRoundInput {
+  sessionId: UUID;
+  executionPrice: number;
 }
 
 export interface OrderBookSideLevel {
@@ -122,6 +136,8 @@ export interface LeaderboardEntry {
   netWorth: number;
   cashBalance: number;
   sharesHeld: number;
+  totalPnL: number;
+  roundPnL: number;
 }
 
 

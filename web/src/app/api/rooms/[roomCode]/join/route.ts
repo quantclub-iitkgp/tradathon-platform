@@ -4,17 +4,18 @@ import { requireUser } from "@/lib/auth";
 
 export async function POST(
   req: Request,
-  { params }: { params: { roomCode: string } }
+  { params }: { params: Promise<{ roomCode: string }> }
 ) {
   try {
     await requireUser();
+    const { roomCode } = await params;
     const { displayName } = (await req.json()) as { displayName: string };
     if (!displayName) return NextResponse.json({ error: "displayName required" }, { status: 400 });
     const user = await requireUser();
-    const result = joinSession({ roomCode: params.roomCode, displayName }, user.uid);
+    const result = joinSession({ roomCode, displayName }, user.uid);
     return NextResponse.json(result);
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message ?? "Failed to join" }, { status: 500 });
+  } catch (e: unknown) {
+    return NextResponse.json({ error: e instanceof Error ? e.message : "Failed to join" }, { status: 500 });
   }
 }
 

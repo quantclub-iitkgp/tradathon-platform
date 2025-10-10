@@ -9,11 +9,9 @@ import {
   LeaderboardEntry,
   Order,
   OrderBookSnapshot,
-  OrderStatus,
-  OrderType,
   PlaceOrderInput,
   PlayerState,
-  Puzzle,
+  Round,
   Trade,
   User,
   UUID,
@@ -29,7 +27,8 @@ type Db = {
   orderIdCounter: number;
   tradesBySession: Map<UUID, Map<number, Trade>>;
   tradeIdCounter: number;
-  puzzlesBySession: Map<UUID, Puzzle | undefined>;
+  roundsBySession: Map<UUID, Map<number, Round>>;
+  roundIdCounter: number;
 };
 
 const db: Db = {
@@ -42,7 +41,8 @@ const db: Db = {
   orderIdCounter: 1,
   tradesBySession: new Map(),
   tradeIdCounter: 1,
-  puzzlesBySession: new Map(),
+  roundsBySession: new Map(),
+  roundIdCounter: 1,
 };
 
 function generateRoomCode(): string {
@@ -77,6 +77,11 @@ export function createSession(input: CreateSessionInput, adminIdOverride?: UUID)
     sessionDurationSec: input.sessionDurationSec,
     currentPrice: null,
     lastTradedPrice: null,
+    currentRound: 0,
+    totalRounds: input.totalRounds,
+    roundDurationSec: input.roundDurationSec,
+    roundStatus: "waiting",
+    roundEndTime: null,
     createdAt: now(),
   };
 
@@ -85,7 +90,7 @@ export function createSession(input: CreateSessionInput, adminIdOverride?: UUID)
   db.playersBySession.set(sessionId, new Map());
   db.ordersBySession.set(sessionId, new Map());
   db.tradesBySession.set(sessionId, new Map());
-  db.puzzlesBySession.set(sessionId, undefined);
+  db.roundsBySession.set(sessionId, new Map());
 
   return { session, adminUser };
 }
@@ -112,7 +117,7 @@ export function joinSession(input: JoinSessionInput, userIdOverride?: UUID): Joi
     sessionId: session.id,
     userId: user.id,
     cashBalance: session.startingCash,
-    sharesHeld: 0,
+    sharesHeld: 0, // Start with 0 shares
   };
   players.set(player.id, player);
 
@@ -132,83 +137,23 @@ function getOpenOrders(sessionId: UUID): Order[] {
   return [...orders.values()].filter((o) => o.status === "open");
 }
 
-function sortOrdersForMatching(orders: Order[], type: OrderType): Order[] {
-  return [...orders].sort((a, b) => {
-    if (a.price === b.price) return a.createdAt - b.createdAt; // FIFO
-    return type === "buy" ? b.price - a.price : a.price - b.price; // price priority
-  });
-}
 
-function tryMatch(session: GameSession) {
-  const allOpen = getOpenOrders(session.id);
-  const bids = sortOrdersForMatching(allOpen.filter((o) => o.type === "buy"), "buy");
-  const asks = sortOrdersForMatching(allOpen.filter((o) => o.type === "sell"), "sell");
-  if (bids.length === 0 || asks.length === 0) return;
-
-  const ordersMap = db.ordersBySession.get(session.id)!;
-  const players = db.playersBySession.get(session.id)!;
-  const trades = db.tradesBySession.get(session.id)!;
-
-  let i = 0;
-  let j = 0;
-  while (i < bids.length && j < asks.length) {
-    const buy = ordersMap.get(bids[i].id)!;
-    const sell = ordersMap.get(asks[j].id)!;
-    if (buy.status !== "open" || sell.status !== "open") {
-      if (buy.status !== "open") i++;
-      if (sell.status !== "open") j++;
-      continue;
-    }
-    if (buy.price < sell.price) break; // no cross
-
-    const quantity = Math.min(buy.quantity, sell.quantity);
-    const price = sell.createdAt <= buy.createdAt ? sell.price : buy.price; // simple tie-breaker, could use mid or last
-
-    // settle
-    const buyPlayer = players.get(buy.playerId)!;
-    const sellPlayer = players.get(sell.playerId)!;
-    buyPlayer.cashBalance -= price * quantity;
-    buyPlayer.sharesHeld += quantity;
-    sellPlayer.cashBalance += price * quantity;
-    sellPlayer.sharesHeld -= quantity;
-
-    const trade: Trade = {
-      id: db.tradeIdCounter++,
-      sessionId: session.id,
-      buyOrderId: buy.id,
-      sellOrderId: sell.id,
-      price,
-      quantity,
-      createdAt: now(),
-    };
-    trades.set(trade.id, trade);
-    session.lastTradedPrice = price;
-
-    buy.quantity -= quantity;
-    sell.quantity -= quantity;
-    if (buy.quantity === 0) buy.status = "filled";
-    if (sell.quantity === 0) sell.status = "filled";
-
-    if (buy.status !== "open") i++;
-    if (sell.status !== "open") j++;
-  }
-}
 
 export function placeOrder(input: PlaceOrderInput): { order: Order } {
   const session = db.sessions.get(input.sessionId);
   if (!session) throw new Error("Session not found");
   if (session.status !== "active") throw new Error("Session is not active");
+  if (session.roundStatus !== "active") throw new Error("Orders can only be placed during active rounds");
 
   const player = getPlayerByUser(input.sessionId, input.userId);
   if (!player) throw new Error("Player not found in session");
 
-  // Early-access gating based on puzzle
-  const puzzle = db.puzzlesBySession.get(input.sessionId);
-  const nowMs = now();
-  if (puzzle && puzzle.isActive && puzzle.priceUnlockTime && nowMs < puzzle.priceUnlockTime) {
-    if (puzzle.solvedByUserId !== input.userId) {
-      throw new Error("Price locked: only first solver can trade until unlock");
-    }
+  // Check if player already has an order for this round
+  const existingOrders = getOpenOrders(input.sessionId).filter(o => 
+    o.playerId === player.id && o.roundNumber === session.currentRound
+  );
+  if (existingOrders.length > 0) {
+    throw new Error("Only one order per round allowed");
   }
 
   // constraints
@@ -229,11 +174,10 @@ export function placeOrder(input: PlaceOrderInput): { order: Order } {
     price: input.price,
     quantity: input.quantity,
     status: "open",
+    roundNumber: session.currentRound,
     createdAt: now(),
   };
   db.ordersBySession.get(input.sessionId)!.set(order.id, order);
-
-  tryMatch(session);
 
   return { order };
 }
@@ -277,10 +221,25 @@ export function getLeaderboard(sessionId: UUID): LeaderboardEntry[] {
   const players = db.playersBySession.get(sessionId)!;
   const lastPrice = session.lastTradedPrice ?? session.currentPrice ?? 0;
   const out: LeaderboardEntry[] = [];
+  
   for (const p of players.values()) {
     const user = db.users.get(p.userId)!;
-    const netWorth = p.cashBalance + p.sharesHeld * lastPrice;
-    out.push({ userId: user.id, displayName: user.displayName, netWorth, cashBalance: p.cashBalance, sharesHeld: p.sharesHeld });
+    const currentValue = p.cashBalance + p.sharesHeld * lastPrice;
+    const initialValue = session.startingCash + 100 * lastPrice; // Starting cash + 100 shares at current price
+    const totalPnL = currentValue - initialValue;
+    
+    // Calculate round P&L (simplified - could be more sophisticated)
+    const roundPnL = session.currentRound > 0 ? totalPnL / session.currentRound : 0;
+    
+    out.push({ 
+      userId: user.id, 
+      displayName: user.displayName, 
+      netWorth: currentValue, 
+      cashBalance: p.cashBalance, 
+      sharesHeld: p.sharesHeld,
+      totalPnL,
+      roundPnL
+    });
   }
   return out.sort((a, b) => b.netWorth - a.netWorth);
 }
@@ -297,30 +256,121 @@ export function setCurrentPrice(sessionId: UUID, price: number) {
   session.currentPrice = price;
 }
 
-export function upsertPuzzle(sessionId: UUID, question: string, answer: string, advanceSeconds = 10) {
-  const puzzle: Puzzle = {
-    id: 1,
+export function startRound(sessionId: UUID): { round: Round } {
+  const session = db.sessions.get(sessionId);
+  if (!session) throw new Error("Session not found");
+  if (session.status !== "active") throw new Error("Session is not active");
+  if (session.roundStatus !== "waiting") throw new Error("Round not in waiting state");
+  if (session.currentRound >= session.totalRounds) throw new Error("All rounds completed");
+
+  session.currentRound++;
+  session.roundStatus = "active";
+  session.roundEndTime = now() + session.roundDurationSec * 1000;
+
+  const round: Round = {
+    id: db.roundIdCounter++,
     sessionId,
-    question,
-    answer,
-    isActive: true,
-    solvedByUserId: undefined,
-    priceUnlockTime: now() + advanceSeconds * 1000,
+    roundNumber: session.currentRound,
+    status: "active",
+    startTime: now(),
+    endTime: null,
+    executionPrice: null,
+    orders: [],
   };
-  db.puzzlesBySession.set(sessionId, puzzle);
+
+  db.roundsBySession.get(sessionId)!.set(round.id, round);
+  return { round };
 }
 
-export function getPuzzle(sessionId: UUID): Puzzle | undefined {
-  return db.puzzlesBySession.get(sessionId);
+export function endRound(sessionId: UUID, executionPrice: number): { round: Round; trades: Trade[] } {
+  const session = db.sessions.get(sessionId);
+  if (!session) throw new Error("Session not found");
+  if (session.roundStatus !== "active") throw new Error("Round not active");
+
+  session.roundStatus = "executing";
+  const round = db.roundsBySession.get(sessionId)!.get(session.currentRound);
+  if (!round) throw new Error("Round not found");
+
+  round.status = "executing";
+  round.endTime = now();
+  round.executionPrice = executionPrice;
+
+  // Execute all orders at the execution price with time priority
+  const roundOrders = getOpenOrders(sessionId).filter(o => o.roundNumber === session.currentRound);
+  const trades = executeRoundOrders(sessionId, roundOrders, executionPrice);
+
+  round.status = "completed";
+  session.roundStatus = session.currentRound >= session.totalRounds ? "completed" : "waiting";
+  session.lastTradedPrice = executionPrice;
+
+  return { round, trades };
 }
 
-export function submitPuzzleAnswer(sessionId: UUID, userId: UUID, provided: string) {
-  const p = db.puzzlesBySession.get(sessionId);
-  if (!p || !p.isActive) return { correct: false };
-  if (p.solvedByUserId) return { correct: false };
-  const ok = p.answer.trim().toLowerCase() === provided.trim().toLowerCase();
-  if (ok) p.solvedByUserId = userId;
-  return { correct: ok };
+function executeRoundOrders(sessionId: UUID, orders: Order[], executionPrice: number): Trade[] {
+  const session = db.sessions.get(sessionId)!;
+  const players = db.playersBySession.get(sessionId)!;
+  const trades = db.tradesBySession.get(sessionId)!;
+  const executedTrades: Trade[] = [];
+
+  // Sort by time priority (earliest first)
+  const sortedOrders = [...orders].sort((a, b) => a.createdAt - b.createdAt);
+  
+  const buyOrders = sortedOrders.filter(o => o.type === "buy");
+  const sellOrders = sortedOrders.filter(o => o.type === "sell");
+
+  let buyIndex = 0;
+  let sellIndex = 0;
+
+  while (buyIndex < buyOrders.length && sellIndex < sellOrders.length) {
+    const buyOrder = buyOrders[buyIndex];
+    const sellOrder = sellOrders[sellIndex];
+
+    const quantity = Math.min(buyOrder.quantity, sellOrder.quantity);
+    
+    // Execute trade at execution price
+    const buyPlayer = players.get(buyOrder.playerId)!;
+    const sellPlayer = players.get(sellOrder.playerId)!;
+
+    const cost = executionPrice * quantity;
+    buyPlayer.cashBalance -= cost;
+    buyPlayer.sharesHeld += quantity;
+    sellPlayer.cashBalance += cost;
+    sellPlayer.sharesHeld -= quantity;
+
+    const trade: Trade = {
+      id: db.tradeIdCounter++,
+      sessionId,
+      buyOrderId: buyOrder.id,
+      sellOrderId: sellOrder.id,
+      price: executionPrice,
+      quantity,
+      roundNumber: session.currentRound,
+      createdAt: now(),
+    };
+
+    trades.set(trade.id, trade);
+    executedTrades.push(trade);
+
+    // Update order quantities
+    buyOrder.quantity -= quantity;
+    sellOrder.quantity -= quantity;
+
+    if (buyOrder.quantity === 0) {
+      buyOrder.status = "filled";
+      buyIndex++;
+    }
+    if (sellOrder.quantity === 0) {
+      sellOrder.status = "filled";
+      sellIndex++;
+    }
+  }
+
+  // Mark remaining orders as cancelled
+  [...buyOrders.slice(buyIndex), ...sellOrders.slice(sellIndex)].forEach(order => {
+    order.status = "cancelled";
+  });
+
+  return executedTrades;
 }
 
 export function getSessionState(sessionId: UUID): GameSession {

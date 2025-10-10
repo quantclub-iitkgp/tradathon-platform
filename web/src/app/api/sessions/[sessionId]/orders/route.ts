@@ -4,9 +4,10 @@ import { OrderType } from "@/lib/types";
 
 export async function POST(
   req: Request,
-  { params }: { params: { sessionId: string } }
+  { params }: { params: Promise<{ sessionId: string }> }
 ) {
   try {
+    const { sessionId } = await params;
     const { userId, type, price, quantity } = (await req.json()) as {
       userId: string;
       type: OrderType;
@@ -16,10 +17,10 @@ export async function POST(
     if (!userId || !type || !price || !quantity) {
       return NextResponse.json({ error: "Invalid input" }, { status: 400 });
     }
-    const result = placeOrder({ sessionId: params.sessionId, userId, type, price, quantity });
+    const result = placeOrder({ sessionId, userId, type, price, quantity });
     return NextResponse.json(result);
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message ?? "Failed to place order" }, { status: 400 });
+  } catch (e: unknown) {
+    return NextResponse.json({ error: e instanceof Error ? e.message : "Failed to place order" }, { status: 400 });
   }
 }
 

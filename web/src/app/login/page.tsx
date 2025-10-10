@@ -18,8 +18,8 @@ export default function LoginPage() {
       setMessage(`Signed in as ${res.user.email}`);
       localStorage.setItem("idToken", token);
       router.replace("/");
-    } catch (e: any) {
-      setMessage(e.message ?? String(e));
+    } catch (e: unknown) {
+      setMessage(e instanceof Error ? e.message : String(e));
     }
   }
 
@@ -31,8 +31,8 @@ export default function LoginPage() {
       setMessage(`Signed in as ${res.user.email}`);
       localStorage.setItem("idToken", token);
       router.replace("/");
-    } catch (e: any) {
-      setMessage(e.message ?? String(e));
+    } catch (e: unknown) {
+      setMessage(e instanceof Error ? e.message : String(e));
     }
   }
 

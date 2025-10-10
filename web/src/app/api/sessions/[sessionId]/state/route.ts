@@ -3,13 +3,14 @@ import { getSessionState } from "@/lib/store";
 
 export async function GET(
   _req: Request,
-  { params }: { params: { sessionId: string } }
+  { params }: { params: Promise<{ sessionId: string }> }
 ) {
   try {
-    const s = getSessionState(params.sessionId);
+    const { sessionId } = await params;
+    const s = getSessionState(sessionId);
     return NextResponse.json(s);
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message ?? "Failed" }, { status: 404 });
+  } catch (e: unknown) {
+    return NextResponse.json({ error: e instanceof Error ? e.message : "Failed" }, { status: 404 });
   }
 }
 

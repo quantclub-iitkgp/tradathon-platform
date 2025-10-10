@@ -3,13 +3,14 @@ import { getOrderBook } from "@/lib/store";
 
 export async function GET(
   _req: Request,
-  { params }: { params: { sessionId: string } }
+  { params }: { params: Promise<{ sessionId: string }> }
 ) {
   try {
-    const ob = getOrderBook(params.sessionId);
+    const { sessionId } = await params;
+    const ob = getOrderBook(sessionId);
     return NextResponse.json(ob);
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message ?? "Failed" }, { status: 500 });
+  } catch (e: unknown) {
+    return NextResponse.json({ error: e instanceof Error ? e.message : "Failed" }, { status: 500 });
   }
 }
 

@@ -1,48 +1,46 @@
 import { NextResponse } from "next/server";
-import { getPuzzle, submitPuzzleAnswer, upsertPuzzle, setSessionStatus, setCurrentPrice } from "@/lib/store";
+import { startRound, endRound, setSessionStatus, setCurrentPrice } from "@/lib/store";
 
-export async function GET(
-  _req: Request,
-  { params }: { params: { sessionId: string } }
-) {
+export async function POST(req: Request, { params }: { params: Promise<{ sessionId: string }> }) {
   try {
-    const p = getPuzzle(params.sessionId);
-    return NextResponse.json(p ?? null);
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message ?? "Failed" }, { status: 500 });
-  }
-}
-
-export async function POST(req: Request, { params }: { params: { sessionId: string } }) {
-  try {
-    const body = (await req.json()) as { question?: string; answer?: string; userId?: string; submitAnswer?: string; setPrice?: number; start?: boolean; pause?: boolean; end?: boolean };
-    if (body.question && body.answer) {
-      upsertPuzzle(params.sessionId, body.question, body.answer);
-      return NextResponse.json({ ok: true });
-    }
+    const { sessionId } = await params;
+    const body = (await req.json()) as { 
+      setPrice?: number; 
+      start?: boolean; 
+      pause?: boolean; 
+      end?: boolean;
+      startRound?: boolean;
+      endRound?: boolean;
+      executionPrice?: number;
+    };
+    
     if (typeof body.setPrice === "number") {
-      setCurrentPrice(params.sessionId, body.setPrice);
+      setCurrentPrice(sessionId, body.setPrice);
       return NextResponse.json({ ok: true });
     }
     if (body.start) {
-      setSessionStatus(params.sessionId, "active");
+      setSessionStatus(sessionId, "active");
       return NextResponse.json({ ok: true });
     }
     if (body.pause) {
-      setSessionStatus(params.sessionId, "paused");
+      setSessionStatus(sessionId, "paused");
       return NextResponse.json({ ok: true });
     }
     if (body.end) {
-      setSessionStatus(params.sessionId, "ended");
+      setSessionStatus(sessionId, "ended");
       return NextResponse.json({ ok: true });
     }
-    if (body.userId && typeof body.submitAnswer === "string") {
-      const res = submitPuzzleAnswer(params.sessionId, body.userId, body.submitAnswer);
-      return NextResponse.json(res);
+    if (body.startRound) {
+      const result = startRound(sessionId);
+      return NextResponse.json(result);
+    }
+    if (body.endRound && typeof body.executionPrice === "number") {
+      const result = endRound(sessionId, body.executionPrice);
+      return NextResponse.json(result);
     }
     return NextResponse.json({ error: "Invalid body" }, { status: 400 });
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message ?? "Failed" }, { status: 400 });
+  } catch (e: unknown) {
+    return NextResponse.json({ error: e instanceof Error ? e.message : "Failed" }, { status: 400 });
   }
 }
 

@@ -9,8 +9,8 @@ export async function GET(req: Request) {
   try {
     const pv = getPlayerView(sessionId, userId);
     return NextResponse.json(pv);
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message ?? "Failed" }, { status: 400 });
+  } catch (e: unknown) {
+    return NextResponse.json({ error: e instanceof Error ? e.message : "Failed" }, { status: 400 });
   }
 }
 
