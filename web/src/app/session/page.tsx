@@ -24,11 +24,9 @@ export default function SessionPage() {
     setMounted(true);
   }, []);
   const [state, setState] = useState<{ currentRound?: number; totalRounds?: number; roundStatus?: string; roundEndTime?: number } | null>(null);
-  const [orderbook, setOrderbook] = useState<{ bids?: { price: number; quantity: number }[]; asks?: { price: number; quantity: number }[] } | null>(null);
   const [leaderboard, setLeaderboard] = useState<unknown[]>([]);
   const [playerView, setPlayerView] = useState<PlayerView | null>(null);
   const [type, setType] = useState<"buy" | "sell">("buy");
-  const [price, setPrice] = useState("");
   const [quantity, setQuantity] = useState("");
   const [roundTimeLeft, setRoundTimeLeft] = useState<number | null>(null);
 
@@ -36,15 +34,13 @@ export default function SessionPage() {
     if (!sessionId || !userId) return;
     const token = typeof window !== 'undefined' ? localStorage.getItem('idToken') : null;
     const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
-    const [sRes, obRes, lbRes, pvRes] = await Promise.all([
+    const [sRes, lbRes, pvRes] = await Promise.all([
       fetch(`/api/sessions/${sessionId}/state`),
-      fetch(`/api/sessions/${sessionId}/orderbook`),
       fetch(`/api/sessions/${sessionId}/leaderboard`),
       fetch(`/api/player?sessionId=${sessionId}&userId=${userId}`, { headers }),
     ]);
     const sessionState = await sRes.json() as { currentRound?: number; totalRounds?: number; roundStatus?: string; roundEndTime?: number };
     setState(sessionState);
-    setOrderbook(await obRes.json() as { bids?: { price: number; quantity: number }[]; asks?: { price: number; quantity: number }[] });
     setLeaderboard(await lbRes.json());
     setPlayerView(await pvRes.json());
     
@@ -69,11 +65,10 @@ export default function SessionPage() {
     const res = await fetch(`/api/sessions/${sessionId}/orders`, {
       method: "POST",
       headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-      body: JSON.stringify({ userId, type, price: Number(price), quantity: Number(quantity) }),
+      body: JSON.stringify({ userId, type, price: 0, quantity: Number(quantity) }),
     });
     const data = await res.json();
     if (!res.ok) alert(data.error);
-    setPrice("");
     setQuantity("");
     refresh();
   }
@@ -113,9 +108,11 @@ export default function SessionPage() {
                 <option value="buy">Buy</option>
                 <option value="sell">Sell</option>
               </select>
-              <Input placeholder="Price" value={price} onChange={(e) => setPrice(e.target.value)} />
               <Input placeholder="Quantity" value={quantity} onChange={(e) => setQuantity(e.target.value)} />
-              <Button onClick={place}>Place</Button>
+              <Button onClick={place}>Place Order</Button>
+            </div>
+            <div className="text-xs text-muted-foreground mt-2">
+              Note: Execution price is set by the admin at the end of each round
             </div>
           </CardContent>
         </Card>
@@ -141,44 +138,6 @@ export default function SessionPage() {
       </div>
 
       <div className="space-y-6">
-        <Card>
-          <CardHeader>
-            <CardTitle>Order Book</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <div className="font-medium mb-2">Bids</div>
-                <div className="space-y-1">
-                  {orderbook?.bids?.map((l: unknown) => {
-                    const level = l as { price: number; quantity: number };
-                    return (
-                    <div key={`b-${level.price}`} className="flex justify-between border px-2 py-1 rounded">
-                      <span>${level.price.toFixed(2)}</span>
-                      <span>{level.quantity}</span>
-                    </div>
-                    );
-                  })}
-                </div>
-              </div>
-              <div>
-                <div className="font-medium mb-2">Asks</div>
-                <div className="space-y-1">
-                  {orderbook?.asks?.map((l: unknown) => {
-                    const level = l as { price: number; quantity: number };
-                    return (
-                    <div key={`a-${level.price}`} className="flex justify-between border px-2 py-1 rounded">
-                      <span>${level.price.toFixed(2)}</span>
-                      <span>{level.quantity}</span>
-                    </div>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
         <Card>
           <CardHeader>
             <CardTitle>Leaderboard</CardTitle>

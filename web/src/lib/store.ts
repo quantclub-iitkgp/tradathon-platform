@@ -158,8 +158,9 @@ export function placeOrder(input: PlaceOrderInput): { order: Order } {
 
   // constraints
   if (input.type === "buy") {
-    const cost = input.price * input.quantity;
-    if (cost > player.cashBalance) throw new Error("Insufficient cash balance");
+    // Use current market price for validation since execution price is admin-controlled
+    const estimatedCost = (session.currentPrice || 100) * input.quantity;
+    if (estimatedCost > player.cashBalance) throw new Error("Insufficient cash balance");
     if (player.sharesHeld + input.quantity > session.maxShares)
       throw new Error("Max share holding exceeded");
   } else {
@@ -213,6 +214,34 @@ export function getOrderBook(sessionId: UUID): OrderBookSnapshot {
   }
 
   return { bids: aggregate(bids), asks: aggregate(asks) };
+}
+
+export function getDetailedOrderBook(sessionId: UUID) {
+  const open = getOpenOrders(sessionId);
+  const players = db.playersBySession.get(sessionId)!;
+  
+  const bids = open
+    .filter((o) => o.type === "buy")
+    .sort((a, b) => (a.price === b.price ? a.createdAt - b.createdAt : b.price - a.price));
+  const asks = open
+    .filter((o) => o.type === "sell")
+    .sort((a, b) => (a.price === b.price ? a.createdAt - b.createdAt : a.price - b.price));
+
+  function enrichOrders(orders: Order[]) {
+    return orders.map(order => {
+      const player = players.get(order.playerId)!;
+      const user = db.users.get(player.userId)!;
+      return {
+        ...order,
+        playerName: user.displayName,
+      };
+    });
+  }
+
+  return {
+    bids: enrichOrders(bids),
+    asks: enrichOrders(asks),
+  };
 }
 
 export function getLeaderboard(sessionId: UUID): LeaderboardEntry[] {
@@ -389,6 +418,38 @@ export function getPlayerView(sessionId: UUID, userId: UUID) {
     openOrders: myOrders.filter((o) => o.status === "open"),
     closedOrders: myOrders.filter((o) => o.status !== "open"),
   };
+}
+
+export function getTradesForSession(sessionId: UUID) {
+  const trades = db.tradesBySession.get(sessionId);
+  if (!trades) return [];
+  
+  const orders = db.ordersBySession.get(sessionId)!;
+  const players = db.playersBySession.get(sessionId)!;
+  
+  return [...trades.values()].map(trade => {
+    const buyOrder = orders.get(trade.buyOrderId)!;
+    const sellOrder = orders.get(trade.sellOrderId)!;
+    const buyPlayer = players.get(buyOrder.playerId)!;
+    const sellPlayer = players.get(sellOrder.playerId)!;
+    const buyer = db.users.get(buyPlayer.userId)!;
+    const seller = db.users.get(sellPlayer.userId)!;
+    
+    return {
+      ...trade,
+      buyerName: buyer.displayName,
+      sellerName: seller.displayName,
+    };
+  });
+}
+
+export function getRoundHistory(sessionId: UUID) {
+  const rounds = db.roundsBySession.get(sessionId);
+  if (!rounds) return [];
+  
+  return [...rounds.values()]
+    .filter(round => round.status === "completed")
+    .sort((a, b) => a.roundNumber - b.roundNumber);
 }
 
 

@@ -14,7 +14,7 @@ export async function POST(
       price: number;
       quantity: number;
     };
-    if (!userId || !type || !price || !quantity) {
+    if (!userId || !type || price === undefined || price === null || !quantity) {
       return NextResponse.json({ error: "Invalid input" }, { status: 400 });
     }
     const result = placeOrder({ sessionId, userId, type, price, quantity });
