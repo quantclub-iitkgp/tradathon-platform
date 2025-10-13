@@ -145,6 +145,14 @@ export async function getSessionState(sessionId: UUID): Promise<GameSession> {
   return await dbStore.getSessionState(sessionId);
 }
 
+export async function startIpoRound(sessionId: UUID, expectedPrice: number): Promise<{ success: boolean }> {
+  return await dbStore.startIpoRound(sessionId, expectedPrice);
+}
+
+export async function executeIpoRound(sessionId: UUID, executionPrice: number): Promise<{ trades: Trade[] }> {
+  return await dbStore.executeIpoRound(sessionId, executionPrice);
+}
+
 export async function getPlayerView(sessionId: UUID, userId: UUID) {
   return await dbStore.getPlayerView(sessionId, userId);
 }

@@ -11,6 +11,7 @@ import {
   OrderBookSnapshot,
   PlaceOrderInput,
   PlayerState,
+  Trade,
   User,
   UUID,
 } from "./types";
@@ -40,7 +41,7 @@ function convertPrismaGameSession(session: PrismaGameSession): GameSession {
     currentRound: session.current_round || 0,
     totalRounds: session.total_rounds || 0,
     roundDurationSec: session.round_duration_sec || 60,
-    roundStatus: (session.round_status as "waiting" | "active" | "executing" | "completed") || "waiting",
+    roundStatus: (session.round_status as "waiting" | "active" | "executing" | "completed" | "ipo_active") || "waiting",
     roundEndTime: session.round_end_time ? new Date(session.round_end_time).getTime() : null,
     createdAt: new Date(session.created_at).getTime(),
   };
@@ -118,7 +119,8 @@ export async function createSession(input: CreateSessionInput, adminIdOverride?:
       current_round: 0,
       total_rounds: input.totalRounds,
       round_duration_sec: input.roundDurationSec,
-      round_status: "waiting",
+      round_status: "ipo_active",
+      current_price: 100, // Default IPO price for round 0
     },
   });
 
@@ -150,7 +152,7 @@ export async function joinSession(input: JoinSessionInput): Promise<JoinSessionR
   });
   
   if (!session) throw new Error("Session not found");
-  if (session.status !== "lobby") throw new Error("Session is not in lobby state");
+  if (session.status === "ended") throw new Error("Session has ended");
 
   // Create or get user
   let user = await prisma.user.findFirst({
@@ -178,6 +180,7 @@ export async function joinSession(input: JoinSessionInput): Promise<JoinSessionR
   if (existingPlayer) {
     player = existingPlayer;
   } else {
+    // All new players start with the same starting cash and 0 shares, regardless of when they join
     player = await prisma.player.create({
       data: {
         session_id: session.id,
@@ -202,7 +205,7 @@ export async function placeOrder(input: PlaceOrderInput): Promise<{ order: Order
   
   if (!session) throw new Error("Session not found");
   if (session.status !== "active") throw new Error("Session is not active");
-  if (session.round_status !== "active") throw new Error("Orders can only be placed during active rounds");
+  if (session.round_status !== "active" && session.round_status !== "ipo_active") throw new Error("Orders can only be placed during active rounds");
 
   const player = await prisma.player.findFirst({
     where: {
@@ -485,4 +488,105 @@ export async function getSessionState(sessionId: UUID): Promise<GameSession> {
   const session = await getSessionById(sessionId);
   if (!session) throw new Error("Session not found");
   return session;
+}
+
+export async function startIpoRound(sessionId: UUID, expectedPrice: number): Promise<{ success: boolean }> {
+  const session = await prisma.gameSession.findUnique({
+    where: { id: sessionId },
+  });
+  
+  if (!session) throw new Error("Session not found");
+  if (session.status !== "active") throw new Error("Session is not active");
+  if (session.round_status !== "waiting") throw new Error("Round not in waiting state");
+
+  // Set IPO round status and expected price
+  await prisma.gameSession.update({
+    where: { id: sessionId },
+    data: {
+      round_status: "ipo_active",
+      current_price: expectedPrice,
+    },
+  });
+
+  return { success: true };
+}
+
+export async function executeIpoRound(sessionId: UUID, executionPrice: number): Promise<{ trades: Trade[] }> {
+  const session = await prisma.gameSession.findUnique({
+    where: { id: sessionId },
+  });
+  
+  if (!session) throw new Error("Session not found");
+  if (session.round_status !== "ipo_active") throw new Error("IPO round not active");
+
+  // Get all open orders for IPO round
+  const orders = await prisma.order.findMany({
+    where: {
+      session_id: sessionId,
+      status: "open",
+    },
+    include: {
+      player: true,
+    },
+  });
+
+  const trades: Trade[] = [];
+  
+  // Execute all buy orders at execution price
+  for (const order of orders) {
+    if (order.type === "buy") {
+      const cost = executionPrice * order.quantity;
+      
+      // Update player cash and shares
+      await prisma.player.update({
+        where: { id: order.player_id },
+        data: {
+          cash_balance: Number(order.player.cash_balance) - cost,
+          shares_held: order.player.shares_held + order.quantity,
+        },
+      });
+      
+      // Mark order as filled
+      await prisma.order.update({
+        where: { id: order.id },
+        data: { status: "filled" },
+      });
+      
+      // Create trade record
+      const trade = await prisma.trade.create({
+        data: {
+          session_id: sessionId,
+          buy_order_id: order.id,
+          sell_order_id: order.id, // IPO trades have same order for buy/sell
+          price: executionPrice,
+          quantity: order.quantity,
+          round_number: 1, // IPO is always round 1
+        },
+      });
+      
+      trades.push({
+        id: Number(trade.id),
+        sessionId: trade.session_id,
+        buyOrderId: Number(trade.buy_order_id),
+        sellOrderId: Number(trade.sell_order_id),
+        price: Number(trade.price),
+        quantity: trade.quantity,
+        roundNumber: trade.round_number,
+        createdAt: new Date(trade.created_at).getTime(),
+      });
+    }
+  }
+
+  // Update session to next round
+  const nextRound = session.current_round + 1;
+  await prisma.gameSession.update({
+    where: { id: sessionId },
+    data: {
+      round_status: "waiting",
+      current_round: nextRound,
+      last_traded_price: executionPrice,
+    },
+  });
+
+  return { trades };
 }

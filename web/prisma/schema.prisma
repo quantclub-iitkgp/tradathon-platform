@@ -38,6 +38,14 @@ enum OrderStatus {
   cancelled
 }
 
+enum RoundStatus {
+  waiting
+  active
+  executing
+  completed
+  ipo_active
+}
+
 model User {
   id             String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   display_name   String?
@@ -60,8 +68,8 @@ model GameSession {
   last_traded_price  Decimal?       @db.Decimal(10, 2)
   current_round      Int            @default(0)
   total_rounds       Int            @default(0)
-  round_duration_sec Int            @default(60)
-  round_status       String         @default("waiting")
+  round_duration_sec Int            @default(90)
+  round_status       RoundStatus    @default(waiting)
   round_end_time     DateTime?      @db.Timestamptz(6)
   created_at         DateTime       @default(now()) @db.Timestamptz(6)
   players            Player[]

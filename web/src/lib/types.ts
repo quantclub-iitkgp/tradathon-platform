@@ -2,7 +2,7 @@ export type UUID = string;
 
 export type UserRole = "admin" | "player";
 export type SessionStatus = "lobby" | "active" | "paused" | "ended";
-export type RoundStatus = "waiting" | "active" | "executing" | "completed";
+export type RoundStatus = "waiting" | "active" | "executing" | "completed" | "ipo_active";
 export type OrderType = "buy" | "sell";
 export type OrderStatus = "open" | "filled" | "cancelled";
 

@@ -23,12 +23,13 @@ export default function SessionPage() {
   useEffect(() => {
     setMounted(true);
   }, []);
-  const [state, setState] = useState<{ currentRound?: number; totalRounds?: number; roundStatus?: string; roundEndTime?: number } | null>(null);
+  const [state, setState] = useState<{ currentRound?: number; totalRounds?: number; roundStatus?: string; roundEndTime?: number; currentPrice?: number } | null>(null);
   const [leaderboard, setLeaderboard] = useState<unknown[]>([]);
   const [playerView, setPlayerView] = useState<PlayerView | null>(null);
   const [type, setType] = useState<"buy" | "sell">("buy");
   const [quantity, setQuantity] = useState("");
   const [roundTimeLeft, setRoundTimeLeft] = useState<number | null>(null);
+  const [showIpoNotification, setShowIpoNotification] = useState(false);
 
   const refresh = useCallback(async () => {
     if (!sessionId || !userId) return;
@@ -39,8 +40,15 @@ export default function SessionPage() {
       fetch(`/api/sessions/${sessionId}/leaderboard`),
       fetch(`/api/player?sessionId=${sessionId}&userId=${userId}`, { headers }),
     ]);
-    const sessionState = await sRes.json() as { currentRound?: number; totalRounds?: number; roundStatus?: string; roundEndTime?: number };
+    const sessionState = await sRes.json() as { currentRound?: number; totalRounds?: number; roundStatus?: string; roundEndTime?: number; currentPrice?: number };
     setState(sessionState);
+    
+    // Check for IPO round
+    if (sessionState.roundStatus === "ipo_active") {
+      setShowIpoNotification(true);
+    } else {
+      setShowIpoNotification(false);
+    }
     setLeaderboard(await lbRes.json());
     setPlayerView(await pvRes.json());
     
@@ -61,11 +69,23 @@ export default function SessionPage() {
 
   async function place() {
     if (!sessionId || !userId) return;
+    
+    // Validate quantity for IPO round
+    if (showIpoNotification && Number(quantity) > 5) {
+      alert("Maximum 5 shares allowed in IPO round");
+      return;
+    }
+    
     const token = typeof window !== 'undefined' ? localStorage.getItem('idToken') : null;
     const res = await fetch(`/api/sessions/${sessionId}/orders`, {
       method: "POST",
       headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-      body: JSON.stringify({ userId, type, price: 0, quantity: Number(quantity) }),
+      body: JSON.stringify({ 
+        userId, 
+        type, 
+        price: 0, 
+        quantity: Number(quantity) 
+      }),
     });
     const data = await res.json();
     if (!res.ok) alert(data.error);
@@ -78,8 +98,23 @@ export default function SessionPage() {
   if (!sessionId || !userId) return <div className="p-6">Missing session/user</div>;
 
   return (
-    <div className="max-w-5xl mx-auto py-8 px-4 grid md:grid-cols-2 gap-6">
-      <div className="space-y-6">
+    <div className="max-w-5xl mx-auto py-8 px-4 space-y-6">
+      {showIpoNotification && (
+        <Card className="border-yellow-500 bg-yellow-50">
+          <CardContent className="pt-6">
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="bg-yellow-100 text-yellow-800">IPO ROUND ACTIVE</Badge>
+              <span className="text-sm text-yellow-800">
+                IPO Round is active! Expected price: ${state?.currentPrice?.toFixed(2) || 'N/A'}. 
+                You can place buy orders (max 5 shares). All buy orders will be executed at the admin-set execution price.
+              </span>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+      
+      <div className="grid md:grid-cols-2 gap-6">
+        <div className="space-y-6">
         <Card>
           <CardHeader>
             <CardTitle>Portfolio</CardTitle>
@@ -108,11 +143,15 @@ export default function SessionPage() {
                 <option value="buy">Buy</option>
                 <option value="sell">Sell</option>
               </select>
-              <Input placeholder="Quantity" value={quantity} onChange={(e) => setQuantity(e.target.value)} />
-              <Button onClick={place}>Place Order</Button>
-            </div>
-            <div className="text-xs text-muted-foreground mt-2">
-              Note: Execution price is set by the admin at the end of each round
+              <Input 
+                placeholder="Quantity" 
+                value={quantity} 
+                onChange={(e) => setQuantity(e.target.value)}
+                type="number"
+                min="1"
+                max={showIpoNotification ? "5" : "1000"}
+              />
+              <Button onClick={place}>Place</Button>
             </div>
           </CardContent>
         </Card>
@@ -138,6 +177,7 @@ export default function SessionPage() {
       </div>
 
       <div className="space-y-6">
+
         <Card>
           <CardHeader>
             <CardTitle>Leaderboard</CardTitle>
@@ -170,6 +210,7 @@ export default function SessionPage() {
             </div>
           </CardContent>
         </Card>
+        </div>
       </div>
     </div>
   );
