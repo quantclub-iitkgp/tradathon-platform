@@ -8,7 +8,7 @@ export async function GET(
   const { sessionId } = await context.params;
   
   try {
-    const rounds = getRoundHistory(sessionId);
+    const rounds = await getRoundHistory(sessionId);
     return NextResponse.json(rounds);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";

@@ -7,7 +7,7 @@ export async function GET(
 ) {
   try {
     const { sessionId } = await params;
-    const detailedOrderBook = getDetailedOrderBook(sessionId);
+    const detailedOrderBook = await getDetailedOrderBook(sessionId);
     return NextResponse.json(detailedOrderBook);
   } catch (e: unknown) {
     return NextResponse.json({ error: e instanceof Error ? e.message : "Failed" }, { status: 500 });

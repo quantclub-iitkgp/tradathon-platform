@@ -11,8 +11,7 @@ export async function POST(
     const { roomCode } = await params;
     const { displayName } = (await req.json()) as { displayName: string };
     if (!displayName) return NextResponse.json({ error: "displayName required" }, { status: 400 });
-    const user = await requireUser();
-    const result = joinSession({ roomCode, displayName }, user.uid);
+    const result = await joinSession({ roomCode, displayName });
     return NextResponse.json(result);
   } catch (e: unknown) {
     return NextResponse.json({ error: e instanceof Error ? e.message : "Failed to join" }, { status: 500 });

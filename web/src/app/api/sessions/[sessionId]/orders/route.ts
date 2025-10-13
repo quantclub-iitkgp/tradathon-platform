@@ -17,7 +17,7 @@ export async function POST(
     if (!userId || !type || price === undefined || price === null || !quantity) {
       return NextResponse.json({ error: "Invalid input" }, { status: 400 });
     }
-    const result = placeOrder({ sessionId, userId, type, price, quantity });
+    const result = await placeOrder({ sessionId, userId, type, price, quantity });
     return NextResponse.json(result);
   } catch (e: unknown) {
     return NextResponse.json({ error: e instanceof Error ? e.message : "Failed to place order" }, { status: 400 });

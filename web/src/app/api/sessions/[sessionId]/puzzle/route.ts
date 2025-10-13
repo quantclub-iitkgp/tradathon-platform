@@ -15,27 +15,27 @@ export async function POST(req: Request, { params }: { params: Promise<{ session
     };
     
     if (typeof body.setPrice === "number") {
-      setCurrentPrice(sessionId, body.setPrice);
+      await setCurrentPrice(sessionId, body.setPrice);
       return NextResponse.json({ ok: true });
     }
     if (body.start) {
-      setSessionStatus(sessionId, "active");
+      await setSessionStatus(sessionId, "active");
       return NextResponse.json({ ok: true });
     }
     if (body.pause) {
-      setSessionStatus(sessionId, "paused");
+      await setSessionStatus(sessionId, "paused");
       return NextResponse.json({ ok: true });
     }
     if (body.end) {
-      setSessionStatus(sessionId, "ended");
+      await setSessionStatus(sessionId, "ended");
       return NextResponse.json({ ok: true });
     }
     if (body.startRound) {
-      const result = startRound(sessionId);
+      const result = await startRound(sessionId);
       return NextResponse.json(result);
     }
     if (body.endRound && typeof body.executionPrice === "number") {
-      const result = endRound(sessionId, body.executionPrice);
+      const result = await endRound(sessionId, body.executionPrice);
       return NextResponse.json(result);
     }
     return NextResponse.json({ error: "Invalid body" }, { status: 400 });

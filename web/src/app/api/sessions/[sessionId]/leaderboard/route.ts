@@ -7,7 +7,7 @@ export async function GET(
 ) {
   try {
     const { sessionId } = await params;
-    const lb = getLeaderboard(sessionId);
+    const lb = await getLeaderboard(sessionId);
     return NextResponse.json(lb);
   } catch (e: unknown) {
     return NextResponse.json({ error: e instanceof Error ? e.message : "Failed" }, { status: 500 });

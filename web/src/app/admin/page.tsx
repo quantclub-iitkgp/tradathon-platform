@@ -36,7 +36,6 @@ export default function AdminPage() {
   const [roomCode, setRoomCode] = useState<string | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [price, setPrice] = useState<string>("");
-  const [orderbook, setOrderbook] = useState<{ bids?: { price: number; quantity: number }[]; asks?: { price: number; quantity: number }[] } | null>(null);
   const [detailedOrderbook, setDetailedOrderbook] = useState<{ bids?: DetailedOrder[]; asks?: DetailedOrder[] } | null>(null);
   const [trades, setTrades] = useState<Trade[]>([]);
   const [rounds, setRounds] = useState<Round[]>([]);
@@ -47,16 +46,12 @@ export default function AdminPage() {
     async function fetchData() {
       if (!sessionId) return;
       
-      const [orderbookRes, detailedOrderbookRes, tradesRes, roundsRes] = await Promise.all([
-        fetch(`/api/sessions/${sessionId}/orderbook`),
+      const [detailedOrderbookRes, tradesRes, roundsRes] = await Promise.all([
         fetch(`/api/sessions/${sessionId}/orderbook/detailed`),
         fetch(`/api/sessions/${sessionId}/trades`),
         fetch(`/api/sessions/${sessionId}/rounds`),
       ]);
       
-      if (orderbookRes.ok) {
-        setOrderbook(await orderbookRes.json());
-      }
       if (detailedOrderbookRes.ok) {
         setDetailedOrderbook(await detailedOrderbookRes.json());
       }

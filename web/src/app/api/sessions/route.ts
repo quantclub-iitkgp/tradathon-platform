@@ -17,7 +17,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Invalid input" }, { status: 400 });
     }
     const user = await requireUser();
-    const { session, adminUser } = createSession(body, user.uid);
+    const { session, adminUser } = await createSession(body, user.uid);
     return NextResponse.json({ session, adminUser });
   } catch (e: unknown) {
     return NextResponse.json({ error: e instanceof Error ? e.message : "Failed to create session" }, { status: 500 });

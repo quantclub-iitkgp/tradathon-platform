@@ -7,7 +7,7 @@ export async function GET(
 ) {
   try {
     const { sessionId } = await params;
-    const s = getSessionState(sessionId);
+    const s = await getSessionState(sessionId);
     return NextResponse.json(s);
   } catch (e: unknown) {
     return NextResponse.json({ error: e instanceof Error ? e.message : "Failed" }, { status: 404 });

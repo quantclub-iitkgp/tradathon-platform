@@ -58,6 +58,11 @@ model GameSession {
   session_duration   Int
   current_price      Decimal?       @db.Decimal(10, 2)
   last_traded_price  Decimal?       @db.Decimal(10, 2)
+  current_round      Int            @default(0)
+  total_rounds       Int            @default(0)
+  round_duration_sec Int            @default(60)
+  round_status       String         @default("waiting")
+  round_end_time     DateTime?      @db.Timestamptz(6)
   created_at         DateTime       @default(now()) @db.Timestamptz(6)
   players            Player[]
   puzzles            Puzzle[]
@@ -100,6 +105,7 @@ model Order {
   price       Decimal      @db.Decimal(10, 2)
   quantity    Int
   status      OrderStatus  @default(open)
+  round_number Int         @default(0)
   created_at  DateTime     @default(now()) @db.Timestamptz(6)
   buy_trades  Trade[]      @relation("BuyOrder")
   sell_trades Trade[]      @relation("SellOrder")
@@ -115,5 +121,6 @@ model Trade {
   sell_order_id BigInt
   price         Decimal     @db.Decimal(10, 2)
   quantity      Int
+  round_number  Int         @default(0)
   created_at    DateTime    @default(now()) @db.Timestamptz(6)
 }

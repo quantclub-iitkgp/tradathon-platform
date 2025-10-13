@@ -8,7 +8,7 @@ export async function GET(
   const { sessionId } = await context.params;
   
   try {
-    const trades = getTradesForSession(sessionId);
+    const trades = await getTradesForSession(sessionId);
     return NextResponse.json(trades);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
