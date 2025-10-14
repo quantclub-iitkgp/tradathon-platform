@@ -101,10 +101,10 @@ DIRECT_URL="postgresql://username:password@your-rds-endpoint:5432/tradathon_db?s
 # Application Configuration
 NODE_ENV="production"
 NEXTAUTH_SECRET="your-super-secret-key-here"
-NEXTAUTH_URL="http://13.235.31.76"
+NEXTAUTH_URL="http://65.0.80.171"
 
 # WebSocket Configuration
-NEXT_PUBLIC_APP_URL="http://13.235.31.76"
+NEXT_PUBLIC_APP_URL="http://65.0.80.171"
 HOSTNAME="0.0.0.0"
 PORT="3000"
 
@@ -174,7 +174,7 @@ print_status "Creating Nginx configuration template..."
 sudo tee /etc/nginx/sites-available/tradathon-platform > /dev/null << 'EOF'
 server {
     listen 80;
-    server_name 13.235.31.76;
+    server_name 65.0.80.171;
 
     # Security Headers
     add_header X-Frame-Options DENY;

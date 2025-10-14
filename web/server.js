@@ -28,7 +28,7 @@ app.prepare().then(() => {
   const io = new Server(server, {
     cors: {
       origin: process.env.NODE_ENV === 'production' 
-        ? [process.env.NEXT_PUBLIC_APP_URL || "https://your-domain.com"]
+        ? [process.env.NEXT_PUBLIC_APP_URL || "http://65.0.80.171"]
         : ["http://localhost:3000", "http://127.0.0.1:3000"],
       methods: ["GET", "POST"],
       credentials: true
@@ -98,7 +98,7 @@ app.prepare().then(() => {
     console.log(`> Ready on http://${hostname}:${port}`);
     console.log(`> WebSocket server running with CORS for:`, 
       process.env.NODE_ENV === 'production' 
-        ? [process.env.NEXT_PUBLIC_APP_URL || "https://your-domain.com"]
+        ? [process.env.NEXT_PUBLIC_APP_URL || "http://65.0.80.171"]
         : ["http://localhost:3000", "http://127.0.0.1:3000"]
     );
   });

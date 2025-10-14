@@ -23,12 +23,17 @@ class WebSocketManager {
         if (typeof window !== 'undefined') {
           return window.location.origin;
         }
-        return process.env.NEXT_PUBLIC_APP_URL || '';
+        return process.env.NEXT_PUBLIC_APP_URL || 'http://65.0.80.171';
       }
       return 'http://localhost:3000';
     };
 
-    this.socket = io(getWebSocketUrl(), {
+    const wsUrl = getWebSocketUrl();
+    console.log('WebSocket connecting to:', wsUrl);
+    console.log('NODE_ENV:', process.env.NODE_ENV);
+    console.log('NEXT_PUBLIC_APP_URL:', process.env.NEXT_PUBLIC_APP_URL);
+    
+    this.socket = io(wsUrl, {
       transports: ['websocket', 'polling'],
       timeout: 20000,
       forceNew: true,
