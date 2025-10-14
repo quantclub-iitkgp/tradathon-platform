@@ -167,6 +167,15 @@ export default function SessionPage() {
       return;
     }
     
+    // Validate share limit for buy orders
+    if (type === "buy" && playerView) {
+      const maxBuyable = 5 - playerView.player.sharesHeld;
+      if (Number(quantity) > maxBuyable) {
+        alert(`You can only buy ${maxBuyable} more shares. You currently hold ${playerView.player.sharesHeld}/5 shares.`);
+        return;
+      }
+    }
+    
     setIsPlacingOrder(true);
     
     try {
@@ -237,7 +246,7 @@ export default function SessionPage() {
               <div className="text-sm text-muted-foreground">Cash</div>
               <div>${playerView.player.cashBalance.toFixed(2)}</div>
               <div className="text-sm text-muted-foreground">Shares</div>
-              <div>{playerView.player.sharesHeld}</div>
+              <div>{playerView.player.sharesHeld}/5</div>
               <div className="text-sm text-muted-foreground">Current Price</div>
               <div>${(state?.lastTradedPrice || state?.currentPrice || 100).toFixed(2)}</div>
               <div className="text-sm text-muted-foreground font-medium">Net Worth</div>
@@ -263,12 +272,12 @@ export default function SessionPage() {
                 <option value="sell">Sell</option>
               </select>
               <Input 
-                placeholder="Quantity" 
+                placeholder={type === "buy" ? `Max: ${playerView ? Math.min(5 - playerView.player.sharesHeld, 5) : 5}` : `Max: ${playerView?.player.sharesHeld || 0}`} 
                 value={quantity} 
                 onChange={(e) => setQuantity(e.target.value)}
                 type="number"
                 min="1"
-                max={showIpoNotification ? "5" : "1000"}
+                max={type === "buy" ? (playerView ? Math.min(5 - playerView.player.sharesHeld, 5) : 5) : (playerView?.player.sharesHeld || 0)}
               />
               <Button 
                 onClick={place} 

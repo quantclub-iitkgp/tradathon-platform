@@ -266,7 +266,7 @@ export default function AdminPage() {
          body: JSON.stringify({ 
            adminDisplayName: adminName, 
            startingCash: 10000, 
-           maxShares: 1000, 
+           maxShares: 5, 
            sessionDurationSec: 600,
            totalRounds: Number(totalRounds),
            roundDurationSec: 90

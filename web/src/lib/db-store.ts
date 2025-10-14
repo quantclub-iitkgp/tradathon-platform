@@ -237,7 +237,8 @@ export async function placeOrder(input: PlaceOrderInput): Promise<{ order: Order
       throw new Error("Insufficient cash balance");
     }
     if (player.shares_held + input.quantity > session.max_shares) {
-      throw new Error("Max share holding exceeded");
+      const maxBuyable = session.max_shares - player.shares_held;
+      throw new Error(`Max share limit exceeded. You can only buy ${maxBuyable} more shares (currently holding ${player.shares_held}/${session.max_shares})`);
     }
   } else {
     if (input.quantity > player.shares_held) {
