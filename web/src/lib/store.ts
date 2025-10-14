@@ -44,12 +44,14 @@ export async function placeOrder(input: PlaceOrderInput): Promise<{ order: Order
   // Emit WebSocket event for order placed
   wsService.emitOrderPlaced(input.sessionId, result.order);
   
-  // Also emit session and leaderboard updates
+  // Also emit session, leaderboard, and player updates
   const sessionState = await getSessionState(input.sessionId);
   const leaderboard = await getLeaderboard(input.sessionId);
+  const playerView = await getPlayerView(input.sessionId, input.userId);
   
   wsService.emitSessionUpdate(input.sessionId, sessionState);
   wsService.emitLeaderboardUpdate(input.sessionId, leaderboard);
+  wsService.emitPlayerUpdate(input.sessionId, playerView, input.userId);
   
   return result;
 }
@@ -60,12 +62,14 @@ export async function cancelOrder(input: CancelOrderInput): Promise<{ order: Ord
   // Emit WebSocket event for order cancelled
   wsService.emitOrderCancelled(input.sessionId, result.order);
   
-  // Also emit session and leaderboard updates
+  // Also emit session, leaderboard, and player updates
   const sessionState = await getSessionState(input.sessionId);
   const leaderboard = await getLeaderboard(input.sessionId);
+  const playerView = await getPlayerView(input.sessionId, input.userId);
   
   wsService.emitSessionUpdate(input.sessionId, sessionState);
   wsService.emitLeaderboardUpdate(input.sessionId, leaderboard);
+  wsService.emitPlayerUpdate(input.sessionId, playerView, input.userId);
   
   return result;
 }
@@ -321,12 +325,35 @@ export async function endRound(sessionId: UUID, executionPrice: number): Promise
     wsService.emitTradeExecuted(sessionId, trade);
   }
   
-  // Also emit session and leaderboard updates
+  // Also emit session, leaderboard, and player updates
   const sessionState = await getSessionState(sessionId);
   const leaderboard = await getLeaderboard(sessionId);
   
   wsService.emitSessionUpdate(sessionId, sessionState);
   wsService.emitLeaderboardUpdate(sessionId, leaderboard);
+  
+  // Emit player updates for all affected players
+  const affectedPlayers = new Set<string>();
+  for (const trade of trades) {
+    // Get player IDs from the trade
+    const buyOrder = await prisma.order.findUnique({
+      where: { id: trade.buyOrderId },
+      include: { player: true }
+    });
+    const sellOrder = await prisma.order.findUnique({
+      where: { id: trade.sellOrderId },
+      include: { player: true }
+    });
+    
+    if (buyOrder) affectedPlayers.add(buyOrder.player.user_id);
+    if (sellOrder) affectedPlayers.add(sellOrder.player.user_id);
+  }
+  
+  // Emit player updates for each affected player
+  for (const userId of affectedPlayers) {
+    const playerView = await getPlayerView(sessionId, userId);
+    wsService.emitPlayerUpdate(sessionId, playerView, userId);
+  }
 
   return { round, trades };
 }
@@ -348,12 +375,30 @@ export async function executeIpoRound(sessionId: UUID, executionPrice: number): 
     wsService.emitTradeExecuted(sessionId, trade);
   }
   
-  // Also emit session and leaderboard updates
+  // Also emit session, leaderboard, and player updates
   const sessionState = await getSessionState(sessionId);
   const leaderboard = await getLeaderboard(sessionId);
   
   wsService.emitSessionUpdate(sessionId, sessionState);
   wsService.emitLeaderboardUpdate(sessionId, leaderboard);
+  
+  // Emit player updates for all affected players in IPO
+  const affectedPlayers = new Set<string>();
+  for (const trade of result.trades) {
+    // Get player IDs from the trade
+    const buyOrder = await prisma.order.findUnique({
+      where: { id: trade.buyOrderId },
+      include: { player: true }
+    });
+    
+    if (buyOrder) affectedPlayers.add(buyOrder.player.user_id);
+  }
+  
+  // Emit player updates for each affected player
+  for (const userId of affectedPlayers) {
+    const playerView = await getPlayerView(sessionId, userId);
+    wsService.emitPlayerUpdate(sessionId, playerView, userId);
+  }
   
   return result;
 }
@@ -368,9 +413,37 @@ export async function toggleRoundToIpo(sessionId: UUID, expectedPrice: number): 
     }
   }
   
-  // Also emit session update
+  // Also emit session, leaderboard, and player updates
   const sessionState = await getSessionState(sessionId);
+  const leaderboard = await getLeaderboard(sessionId);
+  
   wsService.emitSessionUpdate(sessionId, sessionState);
+  wsService.emitLeaderboardUpdate(sessionId, leaderboard);
+  
+  // Emit player updates for all affected players
+  if (result.trades) {
+    const affectedPlayers = new Set<string>();
+    for (const trade of result.trades) {
+      // Get player IDs from the trade
+      const buyOrder = await prisma.order.findUnique({
+        where: { id: trade.buyOrderId },
+        include: { player: true }
+      });
+      const sellOrder = await prisma.order.findUnique({
+        where: { id: trade.sellOrderId },
+        include: { player: true }
+      });
+      
+      if (buyOrder) affectedPlayers.add(buyOrder.player.user_id);
+      if (sellOrder) affectedPlayers.add(sellOrder.player.user_id);
+    }
+    
+    // Emit player updates for each affected player
+    for (const userId of affectedPlayers) {
+      const playerView = await getPlayerView(sessionId, userId);
+      wsService.emitPlayerUpdate(sessionId, playerView, userId);
+    }
+  }
   
   return result;
 }

@@ -238,6 +238,22 @@ export default function AdminPage() {
     };
   }, [sessionId, on, off]);
 
+  // Real-time countdown timer
+  useEffect(() => {
+    if (roundTimeLeft === null || roundTimeLeft <= 0) return;
+
+    const timer = setInterval(() => {
+      setRoundTimeLeft(prev => {
+        if (prev === null || prev <= 1000) {
+          return null;
+        }
+        return prev - 1000;
+      });
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [roundTimeLeft]);
+
   async function createSession() {
     if (isCreatingSession) return;
     

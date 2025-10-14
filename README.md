@@ -1,167 +1,244 @@
-# Tradathon - Real-Time Stock Trading Simulation Game
+# Tradathon Platform
 
-A multiplayer stock trading simulation game where players compete to maximize their portfolio value through strategic trading decisions.
+A real-time trading simulation platform built with Next.js, WebSockets, and PostgreSQL.
 
-## 🎮 How to Play
+## Features
 
-### Getting Started
+- 🚀 **Real-time Updates**: WebSocket integration for instant session updates
+- 📊 **Trading Simulation**: Buy/sell orders with real-time order book
+- 🏆 **Leaderboard**: Live ranking system with P&L tracking
+- 🎮 **Game Sessions**: Multi-round trading sessions with IPO rounds
+- 👥 **Multi-player**: Support for multiple players per session
+- 🔐 **Authentication**: Firebase authentication integration
+- 📱 **Responsive UI**: Modern, mobile-friendly interface
 
-1. **Login**: Use Firebase authentication to sign in with Google or email/password
-2. **Create/Join Session**: 
-   - **Admin**: Create a new trading session with custom parameters
-   - **Player**: Join an existing session using the room code
+## Tech Stack
 
-### Game Mechanics
+- **Frontend**: Next.js 15, React 19, TypeScript, Tailwind CSS
+- **Backend**: Next.js API Routes, Socket.IO
+- **Database**: PostgreSQL (AWS RDS)
+- **Authentication**: Firebase Auth
+- **Real-time**: WebSockets (Socket.IO)
+- **ORM**: Prisma
+- **UI Components**: Radix UI, Lucide React
 
-#### Round-Based Trading
-- The game operates in **rounds** with a fixed duration (60-120 seconds)
-- Each round has a **countdown timer** visible to all players
-- Players can submit **one order per round** during the active trading period
-- Orders are collected but **not executed** until the round ends
-
-#### Order Placement Rules
-- **One Order Per Round**: Each player can only submit one buy or sell order per round
-- **Cash Balance**: Cannot place buy orders that exceed your available cash
-- **Share Limits**: Cannot hold more than the maximum share limit set by the admin
-- **Time Priority**: Orders are executed based on when they were submitted (first come, first served)
-
-#### Order Execution
-- At the end of each round, the admin sets the **execution price**
-- All trades in that round are executed at this single price
-- Buy and sell orders are matched against each other
-- Unmatched orders are automatically cancelled
-
-### Player Interface
-
-#### Portfolio Dashboard
-- **Cash Balance**: Your available cash for trading
-- **Shares Held**: Number of shares you currently own
-- **Real-time P&L**: Profit/Loss for the current round and total
-
-#### Trading Panel
-- **Order Type**: Choose between "Buy" or "Sell"
-- **Price**: Set your desired price per share
-- **Quantity**: Number of shares to trade
-- **Submit**: Place your order (only one per round allowed)
-
-#### Leaderboard
-- **Rankings**: Players ranked by total portfolio value
-- **Net Worth**: Cash + (Shares × Current Price)
-- **P&L**: Total profit/loss since game start
-- **Shares Held**: Current share position
-
-### Admin Controls
-
-#### Session Management
-- **Create Session**: Set up new trading sessions with custom parameters
-- **Round Control**: Start and end trading rounds
-- **Price Setting**: Set the execution price for each round
-- **Session Status**: Start, pause, or end the entire session
-
-#### Configuration Options
-- **Round Duration**: How long each trading round lasts
-- **Total Rounds**: Number of rounds in the session
-- **Starting Cash**: Initial cash balance for all players
-- **Maximum Shares**: Share holding limit per player
-
-### Game Flow
-
-1. **Session Setup**: Admin creates a session with desired parameters
-2. **Player Joins**: Players join using the room code
-3. **Round Start**: Admin starts the first round
-4. **Trading Phase**: Players analyze and place orders during the countdown
-5. **Round End**: Admin sets execution price and ends the round
-6. **Order Execution**: All orders are processed at the set price
-7. **Results Update**: Portfolios and leaderboard are updated
-8. **Next Round**: Process repeats until all rounds are complete
-
-### Strategy Tips
-
-#### Market Analysis
-- **Price Trends**: Watch how the execution price changes between rounds
-- **Player Behavior**: Observe other players' trading patterns
-- **Timing**: Submit orders early for better execution priority
-
-#### Risk Management
-- **Diversification**: Don't put all your cash into one trade
-- **Position Sizing**: Consider how much of your portfolio to risk
-- **Market Timing**: Decide when to buy low vs. sell high
-
-#### Competitive Play
-- **Leaderboard Pressure**: Monitor your position relative to other players
-- **Round Strategy**: Plan your trades based on remaining rounds
-- **Final Push**: Make calculated risks in the final rounds
-
-### Technical Features
-
-- **Real-time Updates**: Live leaderboard and portfolio updates
-- **Responsive Design**: Works on desktop and mobile devices
-- **Firebase Authentication**: Secure user login and session management
-- **Round-based Mechanics**: Structured trading periods with clear timing
-- **Order Book**: Transparent view of all pending orders
-
-## 🚀 Getting Started (Development)
+## Quick Start
 
 ### Prerequisites
-- Node.js 18+
-- PostgreSQL database
-- Firebase project
 
-### Installation
+- Node.js 18+ 
+- npm or yarn
+- PostgreSQL database (local or AWS RDS)
+
+### 1. Clone and Install
+
 ```bash
-cd web
+git clone <repository-url>
+cd tradathon-platform/web
 npm install
 ```
 
-### Environment Setup
-Create `.env.local` with:
-```env
-# Firebase
-NEXT_PUBLIC_FIREBASE_API_KEY=your_api_key
-NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=your_auth_domain
-NEXT_PUBLIC_FIREBASE_PROJECT_ID=your_project_id
-NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=your_storage_bucket
-NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=your_sender_id
-NEXT_PUBLIC_FIREBASE_APP_ID=your_app_id
+### 2. Environment Setup
 
-# Firebase Admin
-FIREBASE_ADMIN_PROJECT_ID=your_project_id
-FIREBASE_ADMIN_PRIVATE_KEY=your_private_key
-FIREBASE_ADMIN_CLIENT_EMAIL=your_client_email
-
-# Database
-DATABASE_URL=your_postgresql_url
-DIRECT_URL=your_direct_postgresql_url
-```
-
-### Database Setup
 ```bash
-npx prisma migrate dev
-npx prisma generate
+# Copy environment template
+cp env.example .env
+
+# Edit .env with your configuration
+# For local development, you can use SQLite:
+DATABASE_URL="file:./dev.db"
+DIRECT_URL="file:./dev.db"
 ```
 
-### Run Development Server
+### 3. Database Setup
+
+```bash
+# Generate Prisma client
+npm run prisma:generate
+
+# Run migrations
+npm run prisma:migrate
+
+# (Optional) Open Prisma Studio
+npm run prisma:studio
+```
+
+### 4. Start Development Server
+
 ```bash
 npm run dev
 ```
 
-## 🎯 Game Objectives
+Visit `http://localhost:3000` to see the application.
 
-- **Maximize Portfolio Value**: End the game with the highest net worth
-- **Beat the Market**: Outperform other players through better trading decisions
-- **Risk Management**: Balance potential gains with portfolio protection
-- **Strategic Timing**: Make the right trades at the right time
+## AWS RDS Setup
 
-## 📊 Scoring
+For production deployment with AWS RDS PostgreSQL, follow the detailed guide:
 
-- **Net Worth**: Cash Balance + (Shares Held × Current Price)
-- **P&L**: Total profit/loss from all completed trades
-- **Ranking**: Players sorted by net worth (highest to lowest)
+📖 **[AWS Setup Guide](./AWS_SETUP.md)**
 
-## 🏆 Winning
+Quick setup with the provided script:
 
-The player with the **highest net worth** at the end of all rounds wins the game. This includes both cash and the current value of shares held.
+```bash
+# Configure your .env file with AWS RDS connection
+# Then run:
+./scripts/setup-aws.sh
+```
 
----
+## WebSocket Integration
 
-**Ready to trade?** Login, join a session, and start making your mark on the market! 📈
+The platform now includes real-time WebSocket integration for:
+
+- ✅ Live session state updates
+- ✅ Real-time leaderboard changes  
+- ✅ Instant order placement notifications
+- ✅ Trade execution alerts
+- ✅ Round status updates
+- ✅ Price change notifications
+
+### WebSocket Events
+
+| Event | Description |
+|-------|-------------|
+| `session-updated` | Session state changes (round, status, etc.) |
+| `leaderboard-updated` | Leaderboard ranking changes |
+| `player-updated` | Player portfolio updates |
+| `order-placed` | New order placed |
+| `order-cancelled` | Order cancelled |
+| `trade-executed` | Trade completed |
+| `round-started` | New round begins |
+| `round-ended` | Round completed |
+| `price-updated` | Price changes |
+
+## Project Structure
+
+```
+web/
+├── src/
+│   ├── app/                 # Next.js app router
+│   │   ├── api/            # API routes
+│   │   ├── session/        # Session page
+│   │   └── admin/          # Admin panel
+│   ├── components/         # React components
+│   ├── hooks/              # Custom React hooks
+│   │   └── useWebSocket.ts # WebSocket hook
+│   └── lib/                # Utilities and services
+│       ├── websocket.ts    # WebSocket client
+│       ├── websocket-service.ts # WebSocket server service
+│       ├── store.ts        # Business logic
+│       └── db-store.ts     # Database operations
+├── prisma/                 # Database schema and migrations
+├── scripts/                # Setup and deployment scripts
+└── server.js              # Custom server with WebSocket support
+```
+
+## API Endpoints
+
+### Sessions
+- `POST /api/sessions` - Create new session
+- `GET /api/sessions/[sessionId]/state` - Get session state
+- `GET /api/sessions/[sessionId]/leaderboard` - Get leaderboard
+- `POST /api/sessions/[sessionId]/orders` - Place order
+- `POST /api/sessions/[sessionId]/puzzle` - Admin controls
+
+### Players
+- `GET /api/player` - Get player data
+- `POST /api/player` - Update player
+
+### Rooms
+- `GET /api/rooms/[roomCode]/info` - Get room info
+- `POST /api/rooms/[roomCode]/join` - Join room
+
+## Development
+
+### Available Scripts
+
+```bash
+npm run dev          # Start development server with WebSockets
+npm run build        # Build for production
+npm run start        # Start production server
+npm run lint         # Run ESLint
+npm run prisma:generate  # Generate Prisma client
+npm run prisma:migrate   # Run database migrations
+npm run prisma:studio    # Open Prisma Studio
+```
+
+### Database Schema
+
+The application uses the following main entities:
+
+- **User**: Players and admins
+- **GameSession**: Trading sessions with rounds
+- **Player**: Player state within a session
+- **Order**: Buy/sell orders
+- **Trade**: Executed trades
+- **Puzzle**: Optional puzzle system
+
+See `prisma/schema.prisma` for the complete schema.
+
+## Deployment
+
+### Local Development
+```bash
+npm run dev
+```
+
+### Production with AWS RDS
+1. Follow [AWS Setup Guide](./AWS_SETUP.md)
+2. Configure environment variables
+3. Run migrations
+4. Deploy to your preferred platform
+
+### Environment Variables
+
+Required environment variables:
+
+```env
+# Database
+DATABASE_URL="postgresql://user:pass@host:5432/db"
+DIRECT_URL="postgresql://user:pass@host:5432/db"
+
+# Firebase (if using)
+FIREBASE_PROJECT_ID="your-project-id"
+FIREBASE_PRIVATE_KEY="your-private-key"
+FIREBASE_CLIENT_EMAIL="your-client-email"
+
+# Application
+NODE_ENV="production"
+NEXTAUTH_SECRET="your-secret"
+```
+
+## Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Add tests if applicable
+5. Submit a pull request
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## Support
+
+For questions or issues:
+
+1. Check the [AWS Setup Guide](./AWS_SETUP.md) for deployment issues
+2. Review the [Trading Logic](./TRADING_LOGIC.md) for game mechanics
+3. Check the [How to Play](./HOW_TO_PLAY.md) for user instructions
+4. Open an issue on GitHub
+
+## Changelog
+
+### v2.0.0 - WebSocket Integration
+- ✅ Added real-time WebSocket support
+- ✅ Replaced polling with event-driven updates
+- ✅ Added connection status indicators
+- ✅ Improved performance and user experience
+
+### v1.0.0 - Initial Release
+- ✅ Basic trading simulation
+- ✅ Session management
+- ✅ Leaderboard system
+- ✅ Admin controls
