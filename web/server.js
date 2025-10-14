@@ -7,11 +7,20 @@ const dev = process.env.NODE_ENV !== 'production';
 const hostname = process.env.HOSTNAME || '0.0.0.0';
 const port = process.env.PORT || 3000;
 
+console.log('Starting server with:', {
+  NODE_ENV: process.env.NODE_ENV,
+  dev,
+  hostname,
+  port,
+  NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL
+});
+
 // Create Next.js app
 const app = next({ dev, hostname, port });
 const handle = app.getRequestHandler();
 
 app.prepare().then(() => {
+  console.log('Next.js app prepared successfully');
   // Create HTTP server
   const server = createServer(async (req, res) => {
     try {
@@ -102,4 +111,7 @@ app.prepare().then(() => {
         : ["http://localhost:3000", "http://127.0.0.1:3000"]
     );
   });
+}).catch((err) => {
+  console.error('Failed to prepare Next.js app:', err);
+  process.exit(1);
 });
