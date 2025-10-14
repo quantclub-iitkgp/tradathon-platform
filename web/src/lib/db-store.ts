@@ -371,7 +371,7 @@ export async function getLeaderboard(sessionId: UUID): Promise<LeaderboardEntry[
 
   if (!session) return [];
 
-  const currentPrice = Number(session.current_price) || 100;
+  const currentPrice = Number(session.last_traded_price) || Number(session.current_price) || 100;
 
   return players.map((player) => {
     const netWorth = Number(player.cash_balance) + (player.shares_held * currentPrice);
@@ -519,11 +519,12 @@ export async function executeIpoRound(sessionId: UUID, executionPrice: number): 
   if (!session) throw new Error("Session not found");
   if (session.round_status !== "ipo_active") throw new Error("IPO round not active");
 
-  // Get all open orders for IPO round
+  // Get all open orders for IPO round (round 0)
   const orders = await prisma.order.findMany({
     where: {
       session_id: sessionId,
       status: "open",
+      round_number: 0, // IPO is round 0
     },
     include: {
       player: true,
@@ -560,7 +561,7 @@ export async function executeIpoRound(sessionId: UUID, executionPrice: number): 
           sell_order_id: order.id, // IPO trades have same order for buy/sell
           price: executionPrice,
           quantity: order.quantity,
-          round_number: 1, // IPO is always round 1
+          round_number: 0, // IPO is round 0
         },
       });
       
@@ -585,8 +586,38 @@ export async function executeIpoRound(sessionId: UUID, executionPrice: number): 
       round_status: "waiting",
       current_round: nextRound,
       last_traded_price: executionPrice,
+      current_price: executionPrice, // Also update current price for leaderboard
     },
   });
 
   return { trades };
+}
+
+export async function toggleRoundToIpo(sessionId: UUID, expectedPrice: number): Promise<{ success: boolean; trades?: Trade[] }> {
+  const session = await prisma.gameSession.findUnique({
+    where: { id: sessionId },
+  });
+  
+  if (!session) throw new Error("Session not found");
+  if (session.status !== "active") throw new Error("Session is not active");
+  if (session.round_status !== "active" && session.round_status !== "ipo_active") {
+    throw new Error("Round must be active or IPO active to toggle");
+  }
+
+  // If converting from IPO to regular, execute IPO orders first
+  if (session.round_status === "ipo_active") {
+    const { trades } = await executeIpoRound(sessionId, expectedPrice);
+    return { success: true, trades };
+  }
+
+  // If converting from regular to IPO, just toggle status
+  await prisma.gameSession.update({
+    where: { id: sessionId },
+    data: {
+      round_status: "ipo_active",
+      current_price: expectedPrice, // Update expected price when toggling to IPO
+    },
+  });
+
+  return { success: true };
 }

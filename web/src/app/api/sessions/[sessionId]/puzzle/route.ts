@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { startRound, endRound, setSessionStatus, setCurrentPrice } from "@/lib/store";
+import { startRound, endRound, setSessionStatus, setCurrentPrice, toggleRoundToIpo } from "@/lib/store";
 
 export async function POST(req: Request, { params }: { params: Promise<{ sessionId: string }> }) {
   try {
@@ -12,6 +12,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ session
       startRound?: boolean;
       endRound?: boolean;
       executionPrice?: number;
+      toggleIpo?: boolean;
+      expectedPrice?: number;
     };
     
     if (typeof body.setPrice === "number") {
@@ -36,6 +38,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ session
     }
     if (body.endRound && typeof body.executionPrice === "number") {
       const result = await endRound(sessionId, body.executionPrice);
+      return NextResponse.json(result);
+    }
+    if (body.toggleIpo && typeof body.expectedPrice === "number") {
+      const result = await toggleRoundToIpo(sessionId, body.expectedPrice);
       return NextResponse.json(result);
     }
     return NextResponse.json({ error: "Invalid body" }, { status: 400 });

@@ -196,52 +196,29 @@ export default function AdminPage() {
     if (!sessionId) return;
     const token = typeof window !== 'undefined' ? localStorage.getItem('idToken') : null;
     
-    if (!isIpoActive) {
-      // Start IPO round
-      const p = Number(price);
-      if (!Number.isFinite(p)) {
-        alert("Please enter a valid price");
-        return;
-      }
-      
-      const res = await fetch(`/api/sessions/${sessionId}/ipo`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-        body: JSON.stringify({ 
-          toggle: true, 
-          expectedPrice: p,
-          isActive: false 
-        }),
-      });
-      const data = await res.json();
-      if (res.ok) {
-        setIsIpoActive(true);
-        alert(`IPO Round Started! Expected price: $${p}. Players can now place orders.`);
-      } else {
-        alert(data.error);
-      }
+    const p = Number(price);
+    if (!Number.isFinite(p)) {
+      alert("Please enter a valid price");
+      return;
+    }
+    
+    // Toggle between IPO and regular round
+    const res = await fetch(`/api/sessions/${sessionId}/ipo`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      body: JSON.stringify({ 
+        toggleIpo: true, 
+        expectedPrice: p
+      }),
+    });
+    const data = await res.json();
+    if (res.ok) {
+      setIsIpoActive(!isIpoActive);
+      const action = isIpoActive ? "converted to regular round" : "converted to IPO round";
+      const tradesMessage = data.trades && data.trades.length > 0 ? ` ${data.trades.length} trades executed.` : "";
+      alert(`Round ${action}! Expected price: $${p}.${tradesMessage}`);
     } else {
-      // Execute IPO round
-      const p = Number(price);
-      if (!Number.isFinite(p)) {
-        alert("Please enter a valid execution price");
-        return;
-      }
-      
-      const res = await fetch(`/api/sessions/${sessionId}/ipo`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-        body: JSON.stringify({ 
-          executionPrice: p
-        }),
-      });
-      const data = await res.json();
-      if (res.ok) {
-        setIsIpoActive(false);
-        alert(`IPO Round Ended! ${data.trades?.length || 0} trades executed.`);
-      } else {
-        alert(data.error);
-      }
+      alert(data.error);
     }
   }
 
@@ -296,6 +273,11 @@ export default function AdminPage() {
               <div className="text-sm text-muted-foreground">
                 Round 0 is automatically an IPO round. Players can place buy orders (max 5 shares).
               </div>
+              {isIpoActive && (
+                <div className="text-sm font-medium text-yellow-600 bg-yellow-100 p-2 rounded">
+                  🚨 IPO ROUND ACTIVE
+                </div>
+              )}
               <div className="flex items-center gap-2">
                 <Input placeholder="Price" value={price} onChange={(e) => setPrice(e.target.value)} />
                 <Button variant="outline" onClick={setCurrentPrice}>Update Price</Button>
@@ -303,11 +285,18 @@ export default function AdminPage() {
                   variant={isIpoActive ? "destructive" : "default"} 
                   onClick={toggleIpoRound}
                 >
-                  {isIpoActive ? "End IPO Round" : "Start IPO Round"}
+                  {isIpoActive ? "Convert to Regular Round" : "Convert to IPO Round"}
                 </Button>
               </div>
               <Button variant="outline" onClick={startRound}>Start Round</Button>
-              <Button variant="outline" onClick={endRound}>End Round</Button>
+              <Button 
+                variant="outline" 
+                onClick={endRound}
+                disabled={isIpoActive}
+                title={isIpoActive ? "Cannot end IPO round - use 'Convert to Regular Round' instead" : "End current round"}
+              >
+                End Round
+              </Button>
             </div>
           </CardContent>
         </Card>

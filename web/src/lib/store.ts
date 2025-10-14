@@ -113,7 +113,143 @@ export async function endRound(sessionId: UUID, executionPrice: number): Promise
   });
   
   if (!session) throw new Error("Session not found");
-  if (session.round_status !== "active") throw new Error("Round not active");
+  if (session.round_status !== "active" && session.round_status !== "ipo_active") {
+    throw new Error("Round not active");
+  }
+  
+  // If it's an IPO round, use IPO execution logic
+  if (session.round_status === "ipo_active") {
+    const { trades } = await dbStore.executeIpoRound(sessionId, executionPrice);
+    const round: Round = {
+      id: session.current_round,
+      sessionId,
+      roundNumber: session.current_round,
+      status: "completed",
+      startTime: 0,
+      endTime: Date.now(),
+      executionPrice,
+      orders: [],
+    };
+    return { round, trades };
+  }
+
+  // Get all open orders for current round
+  const orders = await prisma.order.findMany({
+    where: {
+      session_id: sessionId,
+      status: "open",
+      round_number: session.current_round,
+    },
+    include: {
+      player: true,
+    },
+  });
+
+  const trades: Trade[] = [];
+  
+  // Separate buy and sell orders
+  const buyOrders = orders.filter(o => o.type === "buy");
+  const sellOrders = orders.filter(o => o.type === "sell");
+  
+  // Sort orders by time priority (earliest first)
+  buyOrders.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+  sellOrders.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+  
+  // Match orders using two-pointer technique
+  let buyIndex = 0;
+  let sellIndex = 0;
+  
+  while (buyIndex < buyOrders.length && sellIndex < sellOrders.length) {
+    const buyOrder = buyOrders[buyIndex];
+    const sellOrder = sellOrders[sellIndex];
+    
+    // Calculate trade quantity (minimum of both orders)
+    const quantity = Math.min(buyOrder.quantity, sellOrder.quantity);
+    
+    // Execute trade at execution price
+    const cost = executionPrice * quantity;
+    
+    // Update player balances
+    await prisma.player.update({
+      where: { id: buyOrder.player_id },
+      data: {
+        cash_balance: Number(buyOrder.player.cash_balance) - cost,
+        shares_held: buyOrder.player.shares_held + quantity,
+      },
+    });
+    
+    await prisma.player.update({
+      where: { id: sellOrder.player_id },
+      data: {
+        cash_balance: Number(sellOrder.player.cash_balance) + cost,
+        shares_held: sellOrder.player.shares_held - quantity,
+      },
+    });
+    
+    // Create trade record
+    const trade = await prisma.trade.create({
+      data: {
+        session_id: sessionId,
+        buy_order_id: buyOrder.id,
+        sell_order_id: sellOrder.id,
+        price: executionPrice,
+        quantity: quantity,
+        round_number: session.current_round,
+      },
+    });
+    
+    trades.push({
+      id: Number(trade.id),
+      sessionId: trade.session_id,
+      buyOrderId: Number(trade.buy_order_id),
+      sellOrderId: Number(trade.sell_order_id),
+      price: Number(trade.price),
+      quantity: trade.quantity,
+      roundNumber: trade.round_number,
+      createdAt: new Date(trade.created_at).getTime(),
+    });
+    
+    // Update order quantities and check if filled
+    const newBuyQuantity = buyOrder.quantity - quantity;
+    const newSellQuantity = sellOrder.quantity - quantity;
+    
+    if (newBuyQuantity === 0) {
+      await prisma.order.update({
+        where: { id: buyOrder.id },
+        data: { status: "filled" },
+      });
+      buyIndex++;
+    } else {
+      await prisma.order.update({
+        where: { id: buyOrder.id },
+        data: { quantity: newBuyQuantity },
+      });
+    }
+    
+    if (newSellQuantity === 0) {
+      await prisma.order.update({
+        where: { id: sellOrder.id },
+        data: { status: "filled" },
+      });
+      sellIndex++;
+    } else {
+      await prisma.order.update({
+        where: { id: sellOrder.id },
+        data: { quantity: newSellQuantity },
+      });
+    }
+  }
+  
+  // Mark remaining orders as cancelled
+  const remainingBuyOrders = buyOrders.slice(buyIndex);
+  const remainingSellOrders = sellOrders.slice(sellIndex);
+  
+  for (const order of [...remainingBuyOrders, ...remainingSellOrders]) {
+    await prisma.order.update({
+      where: { id: order.id },
+      data: { status: "cancelled" },
+    });
+  }
 
   // Update session status
   await prisma.gameSession.update({
@@ -121,11 +257,10 @@ export async function endRound(sessionId: UUID, executionPrice: number): Promise
     data: {
       round_status: session.current_round >= session.total_rounds ? "completed" : "waiting",
       last_traded_price: executionPrice,
+      current_price: executionPrice, // Also update current price for leaderboard
     },
   });
 
-  // For now, return a simple round object
-  // TODO: Implement full trade execution logic
   const round: Round = {
     id: session.current_round,
     sessionId,
@@ -137,7 +272,7 @@ export async function endRound(sessionId: UUID, executionPrice: number): Promise
     orders: [],
   };
 
-  return { round, trades: [] };
+  return { round, trades };
 }
 
 
@@ -151,6 +286,10 @@ export async function startIpoRound(sessionId: UUID, expectedPrice: number): Pro
 
 export async function executeIpoRound(sessionId: UUID, executionPrice: number): Promise<{ trades: Trade[] }> {
   return await dbStore.executeIpoRound(sessionId, executionPrice);
+}
+
+export async function toggleRoundToIpo(sessionId: UUID, expectedPrice: number): Promise<{ success: boolean; trades?: Trade[] }> {
+  return await dbStore.toggleRoundToIpo(sessionId, expectedPrice);
 }
 
 export async function getPlayerView(sessionId: UUID, userId: UUID) {

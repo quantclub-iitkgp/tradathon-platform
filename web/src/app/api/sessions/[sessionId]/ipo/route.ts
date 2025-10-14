@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { startIpoRound, executeIpoRound } from "@/lib/store";
+import { startIpoRound, executeIpoRound, toggleRoundToIpo } from "@/lib/store";
 
 export async function POST(req: Request, { params }: { params: Promise<{ sessionId: string }> }) {
   try {
@@ -9,10 +9,17 @@ export async function POST(req: Request, { params }: { params: Promise<{ session
       expectedPrice?: number;
       executionPrice?: number;
       isActive?: boolean;
+      toggleIpo?: boolean;
     };
     
+    if (body.toggleIpo && typeof body.expectedPrice === "number") {
+      // Toggle between IPO and regular round
+      const result = await toggleRoundToIpo(sessionId, body.expectedPrice);
+      return NextResponse.json(result);
+    }
+    
     if (body.toggle && typeof body.expectedPrice === "number") {
-      // Start IPO round
+      // Start IPO round (legacy support)
       const result = await startIpoRound(sessionId, body.expectedPrice);
       return NextResponse.json(result);
     }

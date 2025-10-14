@@ -23,7 +23,7 @@ export default function SessionPage() {
   useEffect(() => {
     setMounted(true);
   }, []);
-  const [state, setState] = useState<{ currentRound?: number; totalRounds?: number; roundStatus?: string; roundEndTime?: number; currentPrice?: number } | null>(null);
+  const [state, setState] = useState<{ currentRound?: number; totalRounds?: number; roundStatus?: string; roundEndTime?: number; currentPrice?: number; lastTradedPrice?: number } | null>(null);
   const [leaderboard, setLeaderboard] = useState<unknown[]>([]);
   const [playerView, setPlayerView] = useState<PlayerView | null>(null);
   const [type, setType] = useState<"buy" | "sell">("buy");
@@ -40,7 +40,7 @@ export default function SessionPage() {
       fetch(`/api/sessions/${sessionId}/leaderboard`),
       fetch(`/api/player?sessionId=${sessionId}&userId=${userId}`, { headers }),
     ]);
-    const sessionState = await sRes.json() as { currentRound?: number; totalRounds?: number; roundStatus?: string; roundEndTime?: number; currentPrice?: number };
+    const sessionState = await sRes.json() as { currentRound?: number; totalRounds?: number; roundStatus?: string; roundEndTime?: number; currentPrice?: number; lastTradedPrice?: number };
     setState(sessionState);
     
     // Check for IPO round
@@ -105,7 +105,7 @@ export default function SessionPage() {
             <div className="flex items-center gap-2">
               <Badge variant="outline" className="bg-yellow-100 text-yellow-800">IPO ROUND ACTIVE</Badge>
               <span className="text-sm text-yellow-800">
-                IPO Round is active! Expected price: ${state?.currentPrice?.toFixed(2) || 'N/A'}. 
+                IPO Round is active!  
                 You can place buy orders (max 5 shares). All buy orders will be executed at the admin-set execution price.
               </span>
             </div>
@@ -125,6 +125,12 @@ export default function SessionPage() {
               <div>${playerView.player.cashBalance.toFixed(2)}</div>
               <div className="text-sm text-muted-foreground">Shares</div>
               <div>{playerView.player.sharesHeld}</div>
+              <div className="text-sm text-muted-foreground">Current Price</div>
+              <div>${(state?.lastTradedPrice || state?.currentPrice || 100).toFixed(2)}</div>
+              <div className="text-sm text-muted-foreground font-medium">Net Worth</div>
+              <div className="font-medium">
+                ${((playerView.player.cashBalance) + (playerView.player.sharesHeld * (state?.lastTradedPrice || state?.currentPrice || 100))).toFixed(2)}
+              </div>
             </CardContent>
           ) : (
             <CardContent>
