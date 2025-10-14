@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { useWebSocket } from "@/hooks/useWebSocket";
 
 type PlayerView = {
   player: { id: number; cashBalance: number; sharesHeld: number };
@@ -20,6 +21,9 @@ export default function SessionPage() {
   const sessionId = params.get("sessionId");
   const userId = params.get("userId");
 
+  // WebSocket connection
+  const { on, off, isConnected } = useWebSocket(sessionId);
+
   useEffect(() => {
     setMounted(true);
   }, []);
@@ -30,6 +34,7 @@ export default function SessionPage() {
   const [quantity, setQuantity] = useState("");
   const [roundTimeLeft, setRoundTimeLeft] = useState<number | null>(null);
   const [showIpoNotification, setShowIpoNotification] = useState(false);
+  const [isPlacingOrder, setIsPlacingOrder] = useState(false);
 
   const refresh = useCallback(async () => {
     if (!sessionId || !userId) return;
@@ -61,14 +66,57 @@ export default function SessionPage() {
     }
   }, [sessionId, userId]);
 
+  // WebSocket event listeners
   useEffect(() => {
+    if (!sessionId) return;
+
+    const handleSessionUpdate = (sessionData: any) => {
+      setState(sessionData);
+      
+      // Check for IPO round
+      if (sessionData.roundStatus === "ipo_active") {
+        setShowIpoNotification(true);
+      } else {
+        setShowIpoNotification(false);
+      }
+      
+      // Calculate round time left
+      if (sessionData.roundEndTime) {
+        const timeLeft = Math.max(0, sessionData.roundEndTime - Date.now());
+        setRoundTimeLeft(timeLeft);
+      } else {
+        setRoundTimeLeft(null);
+      }
+    };
+
+    const handleLeaderboardUpdate = (leaderboardData: any) => {
+      setLeaderboard(leaderboardData);
+    };
+
+    const handlePlayerUpdate = (playerData: any) => {
+      if (playerData.userId === userId || !playerData.userId) {
+        setPlayerView(playerData);
+      }
+    };
+
+    // Set up event listeners
+    on('session-updated', handleSessionUpdate);
+    on('leaderboard-updated', handleLeaderboardUpdate);
+    on('player-updated', handlePlayerUpdate);
+
+    // Initial data fetch
     refresh();
-    const id = setInterval(refresh, 1500);
-    return () => clearInterval(id);
-  }, [refresh]);
+
+    // Cleanup
+    return () => {
+      off('session-updated', handleSessionUpdate);
+      off('leaderboard-updated', handleLeaderboardUpdate);
+      off('player-updated', handlePlayerUpdate);
+    };
+  }, [sessionId, userId, on, off, refresh]);
 
   async function place() {
-    if (!sessionId || !userId) return;
+    if (!sessionId || !userId || isPlacingOrder) return;
     
     // Validate quantity for IPO round
     if (showIpoNotification && Number(quantity) > 5) {
@@ -76,21 +124,33 @@ export default function SessionPage() {
       return;
     }
     
-    const token = typeof window !== 'undefined' ? localStorage.getItem('idToken') : null;
-    const res = await fetch(`/api/sessions/${sessionId}/orders`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-      body: JSON.stringify({ 
-        userId, 
-        type, 
-        price: 0, 
-        quantity: Number(quantity) 
-      }),
-    });
-    const data = await res.json();
-    if (!res.ok) alert(data.error);
-    setQuantity("");
-    refresh();
+    setIsPlacingOrder(true);
+    
+    try {
+      const token = typeof window !== 'undefined' ? localStorage.getItem('idToken') : null;
+      const res = await fetch(`/api/sessions/${sessionId}/orders`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        body: JSON.stringify({ 
+          userId, 
+          type, 
+          price: 0, 
+          quantity: Number(quantity) 
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.error);
+      } else {
+        setQuantity("");
+      }
+      // No need to call refresh() - WebSocket will handle updates
+    } catch (error) {
+      console.error('Error placing order:', error);
+      alert('Failed to place order. Please try again.');
+    } finally {
+      setIsPlacingOrder(false);
+    }
   }
 
 
@@ -99,6 +159,16 @@ export default function SessionPage() {
 
   return (
     <div className="max-w-5xl mx-auto py-8 px-4 space-y-6">
+      {/* Connection Status */}
+      <div className="flex justify-between items-center">
+        <div className="flex items-center gap-2">
+          <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'}`}></div>
+          <span className="text-sm text-muted-foreground">
+            {isConnected ? 'Connected' : 'Disconnected'}
+          </span>
+        </div>
+      </div>
+
       {showIpoNotification && (
         <Card className="border-yellow-500 bg-yellow-50">
           <CardContent className="pt-6">
@@ -157,7 +227,12 @@ export default function SessionPage() {
                 min="1"
                 max={showIpoNotification ? "5" : "1000"}
               />
-              <Button onClick={place}>Place</Button>
+              <Button 
+                onClick={place} 
+                disabled={isPlacingOrder || !quantity || Number(quantity) <= 0}
+              >
+                {isPlacingOrder ? "Placing..." : "Place"}
+              </Button>
             </div>
           </CardContent>
         </Card>

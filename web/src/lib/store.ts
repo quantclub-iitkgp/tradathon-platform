@@ -15,6 +15,7 @@ import {
 } from "./types";
 import * as dbStore from "./db-store";
 import { prisma } from "./prisma";
+import { wsService } from "./websocket-service";
 
 
 export async function createSession(input: CreateSessionInput, adminIdOverride?: UUID): Promise<CreateSessionResponse> {
@@ -38,11 +39,35 @@ export async function joinSession(input: JoinSessionInput): Promise<JoinSessionR
 
 
 export async function placeOrder(input: PlaceOrderInput): Promise<{ order: Order }> {
-  return await dbStore.placeOrder(input);
+  const result = await dbStore.placeOrder(input);
+  
+  // Emit WebSocket event for order placed
+  wsService.emitOrderPlaced(input.sessionId, result.order);
+  
+  // Also emit session and leaderboard updates
+  const sessionState = await getSessionState(input.sessionId);
+  const leaderboard = await getLeaderboard(input.sessionId);
+  
+  wsService.emitSessionUpdate(input.sessionId, sessionState);
+  wsService.emitLeaderboardUpdate(input.sessionId, leaderboard);
+  
+  return result;
 }
 
 export async function cancelOrder(input: CancelOrderInput): Promise<{ order: Order }> {
-  return await dbStore.cancelOrder(input);
+  const result = await dbStore.cancelOrder(input);
+  
+  // Emit WebSocket event for order cancelled
+  wsService.emitOrderCancelled(input.sessionId, result.order);
+  
+  // Also emit session and leaderboard updates
+  const sessionState = await getSessionState(input.sessionId);
+  const leaderboard = await getLeaderboard(input.sessionId);
+  
+  wsService.emitSessionUpdate(input.sessionId, sessionState);
+  wsService.emitLeaderboardUpdate(input.sessionId, leaderboard);
+  
+  return result;
 }
 
 export async function getOrderBook(sessionId: UUID): Promise<OrderBookSnapshot> {
@@ -62,6 +87,10 @@ export async function setSessionStatus(sessionId: UUID, status: GameSession["sta
     where: { id: sessionId },
     data: { status },
   });
+  
+  // Emit WebSocket event for session status update
+  const sessionState = await getSessionState(sessionId);
+  wsService.emitSessionUpdate(sessionId, sessionState);
 }
 
 export async function setCurrentPrice(sessionId: UUID, price: number) {
@@ -69,6 +98,13 @@ export async function setCurrentPrice(sessionId: UUID, price: number) {
     where: { id: sessionId },
     data: { current_price: price },
   });
+  
+  // Emit WebSocket event for price update
+  wsService.emitPriceUpdate(sessionId, { price, timestamp: Date.now() });
+  
+  // Also emit session update
+  const sessionState = await getSessionState(sessionId);
+  wsService.emitSessionUpdate(sessionId, sessionState);
 }
 
 export async function startRound(sessionId: UUID): Promise<{ round: Round }> {
@@ -103,6 +139,13 @@ export async function startRound(sessionId: UUID): Promise<{ round: Round }> {
     executionPrice: null,
     orders: [],
   };
+
+  // Emit WebSocket event for round started
+  wsService.emitRoundStarted(sessionId, round);
+  
+  // Also emit session update
+  const sessionState = await getSessionState(sessionId);
+  wsService.emitSessionUpdate(sessionId, sessionState);
 
   return { round };
 }
@@ -272,6 +315,19 @@ export async function endRound(sessionId: UUID, executionPrice: number): Promise
     orders: [],
   };
 
+  // Emit WebSocket events for round ended and trades executed
+  wsService.emitRoundEnded(sessionId, round);
+  for (const trade of trades) {
+    wsService.emitTradeExecuted(sessionId, trade);
+  }
+  
+  // Also emit session and leaderboard updates
+  const sessionState = await getSessionState(sessionId);
+  const leaderboard = await getLeaderboard(sessionId);
+  
+  wsService.emitSessionUpdate(sessionId, sessionState);
+  wsService.emitLeaderboardUpdate(sessionId, leaderboard);
+
   return { round, trades };
 }
 
@@ -285,11 +341,38 @@ export async function startIpoRound(sessionId: UUID, expectedPrice: number): Pro
 }
 
 export async function executeIpoRound(sessionId: UUID, executionPrice: number): Promise<{ trades: Trade[] }> {
-  return await dbStore.executeIpoRound(sessionId, executionPrice);
+  const result = await dbStore.executeIpoRound(sessionId, executionPrice);
+  
+  // Emit WebSocket events for IPO round execution
+  for (const trade of result.trades) {
+    wsService.emitTradeExecuted(sessionId, trade);
+  }
+  
+  // Also emit session and leaderboard updates
+  const sessionState = await getSessionState(sessionId);
+  const leaderboard = await getLeaderboard(sessionId);
+  
+  wsService.emitSessionUpdate(sessionId, sessionState);
+  wsService.emitLeaderboardUpdate(sessionId, leaderboard);
+  
+  return result;
 }
 
 export async function toggleRoundToIpo(sessionId: UUID, expectedPrice: number): Promise<{ success: boolean; trades?: Trade[] }> {
-  return await dbStore.toggleRoundToIpo(sessionId, expectedPrice);
+  const result = await dbStore.toggleRoundToIpo(sessionId, expectedPrice);
+  
+  // Emit WebSocket events for IPO toggle
+  if (result.trades) {
+    for (const trade of result.trades) {
+      wsService.emitTradeExecuted(sessionId, trade);
+    }
+  }
+  
+  // Also emit session update
+  const sessionState = await getSessionState(sessionId);
+  wsService.emitSessionUpdate(sessionId, sessionState);
+  
+  return result;
 }
 
 export async function getPlayerView(sessionId: UUID, userId: UUID) {

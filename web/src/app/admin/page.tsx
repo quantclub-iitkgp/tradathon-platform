@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useWebSocket } from "@/hooks/useWebSocket";
 
 type Trade = {
   id: number;
@@ -42,6 +43,17 @@ export default function AdminPage() {
   const [trades, setTrades] = useState<Trade[]>([]);
   const [rounds, setRounds] = useState<Round[]>([]);
   const [roundTimeLeft, setRoundTimeLeft] = useState<number | null>(null);
+
+  // Loading states
+  const [isCreatingSession, setIsCreatingSession] = useState(false);
+  const [isStartingSession, setIsStartingSession] = useState(false);
+  const [isUpdatingPrice, setIsUpdatingPrice] = useState(false);
+  const [isTogglingIpo, setIsTogglingIpo] = useState(false);
+  const [isStartingRound, setIsStartingRound] = useState(false);
+  const [isEndingRound, setIsEndingRound] = useState(false);
+
+  // WebSocket connection
+  const { on, off, isConnected } = useWebSocket(sessionId);
 
   // Cache admin session data
   const saveAdminState = useCallback(() => {
@@ -99,10 +111,78 @@ export default function AdminPage() {
     }
   }, [adminName, roomCode, sessionId, price, totalRounds, isIpoActive, saveAdminState]);
 
+  // WebSocket event listeners for admin page
   useEffect(() => {
     if (!sessionId) return;
-    
-    async function fetchData() {
+
+    const handleSessionUpdate = (sessionData: any) => {
+      setIsIpoActive(sessionData.roundStatus === "ipo_active");
+      if (sessionData.currentPrice && sessionData.roundStatus === "ipo_active") {
+        setPrice(sessionData.currentPrice.toString());
+      }
+      
+      // Calculate round time left
+      if (sessionData.roundEndTime) {
+        const timeLeft = Math.max(0, sessionData.roundEndTime - Date.now());
+        setRoundTimeLeft(timeLeft);
+      } else {
+        setRoundTimeLeft(null);
+      }
+    };
+
+    const handleOrderPlaced = () => {
+      // Refresh orderbook when orders are placed
+      fetch(`/api/sessions/${sessionId}/orderbook/detailed`)
+        .then(res => res.json())
+        .then(data => setDetailedOrderbook(data))
+        .catch(console.error);
+    };
+
+    const handleOrderCancelled = () => {
+      // Refresh orderbook when orders are cancelled
+      fetch(`/api/sessions/${sessionId}/orderbook/detailed`)
+        .then(res => res.json())
+        .then(data => setDetailedOrderbook(data))
+        .catch(console.error);
+    };
+
+    const handleTradeExecuted = () => {
+      // Refresh trades when new trades are executed
+      fetch(`/api/sessions/${sessionId}/trades`)
+        .then(res => res.json())
+        .then(data => setTrades(data))
+        .catch(console.error);
+    };
+
+    const handleRoundStarted = () => {
+      // Refresh rounds when new round starts
+      fetch(`/api/sessions/${sessionId}/rounds`)
+        .then(res => res.json())
+        .then(data => setRounds(data))
+        .catch(console.error);
+    };
+
+    const handleRoundEnded = () => {
+      // Refresh rounds and trades when round ends
+      Promise.all([
+        fetch(`/api/sessions/${sessionId}/rounds`).then(res => res.json()),
+        fetch(`/api/sessions/${sessionId}/trades`).then(res => res.json())
+      ]).then(([roundsData, tradesData]) => {
+        setRounds(roundsData);
+        setTrades(tradesData);
+      }).catch(console.error);
+    };
+
+    // Set up event listeners
+    on('session-updated', handleSessionUpdate);
+    on('order-placed', handleOrderPlaced);
+    on('order-cancelled', handleOrderCancelled);
+    on('trade-executed', handleTradeExecuted);
+    on('round-started', handleRoundStarted);
+    on('round-ended', handleRoundEnded);
+
+    // Initial data fetch
+    async function fetchInitialData() {
       if (!sessionId) return;
       
       const [sessionStateRes, detailedOrderbookRes, tradesRes, roundsRes] = await Promise.all([
@@ -138,63 +218,134 @@ export default function AdminPage() {
       }
     }
 
-    fetchData();
-    const interval = setInterval(fetchData, 1500);
-    return () => clearInterval(interval);
-  }, [sessionId]);
+    fetchInitialData();
+
+    // Cleanup
+    return () => {
+      off('session-updated', handleSessionUpdate);
+      off('order-placed', handleOrderPlaced);
+      off('order-cancelled', handleOrderCancelled);
+      off('trade-executed', handleTradeExecuted);
+      off('round-started', handleRoundStarted);
+      off('round-ended', handleRoundEnded);
+    };
+  }, [sessionId, on, off]);
 
   async function createSession() {
-    const token = typeof window !== 'undefined' ? localStorage.getItem('idToken') : null;
-    const res = await fetch("/api/sessions", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-       body: JSON.stringify({ 
-         adminDisplayName: adminName, 
-         startingCash: 10000, 
-         maxShares: 1000, 
-         sessionDurationSec: 600,
-         totalRounds: Number(totalRounds),
-         roundDurationSec: 90
-       }),
-    });
-    const data = await res.json();
-    if (res.ok) {
-      setRoomCode(data.session.roomCode);
-      setSessionId(data.session.id);
-    } else alert(data.error);
+    if (isCreatingSession) return;
+    
+    setIsCreatingSession(true);
+    try {
+      const token = typeof window !== 'undefined' ? localStorage.getItem('idToken') : null;
+      const res = await fetch("/api/sessions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+         body: JSON.stringify({ 
+           adminDisplayName: adminName, 
+           startingCash: 10000, 
+           maxShares: 1000, 
+           sessionDurationSec: 600,
+           totalRounds: Number(totalRounds),
+           roundDurationSec: 90
+         }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setRoomCode(data.session.roomCode);
+        setSessionId(data.session.id);
+      } else {
+        alert(data.error);
+      }
+    } catch (error) {
+      console.error('Error creating session:', error);
+      alert('Failed to create session. Please try again.');
+    } finally {
+      setIsCreatingSession(false);
+    }
   }
 
   async function startSession() {
-    if (!sessionId) return;
-    const token = typeof window !== 'undefined' ? localStorage.getItem('idToken') : null;
-    await fetch(`/api/sessions/${sessionId}/puzzle`, { method: "POST", headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) }, body: JSON.stringify({ start: true }) });
+    if (!sessionId || isStartingSession) return;
+    
+    setIsStartingSession(true);
+    try {
+      const token = typeof window !== 'undefined' ? localStorage.getItem('idToken') : null;
+      await fetch(`/api/sessions/${sessionId}/puzzle`, { 
+        method: "POST", 
+        headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) }, 
+        body: JSON.stringify({ start: true }) 
+      });
+    } catch (error) {
+      console.error('Error starting session:', error);
+      alert('Failed to start session. Please try again.');
+    } finally {
+      setIsStartingSession(false);
+    }
   }
 
   async function setCurrentPrice() {
-    if (!sessionId) return;
+    if (!sessionId || isUpdatingPrice) return;
     const p = Number(price);
     if (!Number.isFinite(p)) return;
-    const token = typeof window !== 'undefined' ? localStorage.getItem('idToken') : null;
-    await fetch(`/api/sessions/${sessionId}/puzzle`, { method: "POST", headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) }, body: JSON.stringify({ setPrice: p }) });
+    
+    setIsUpdatingPrice(true);
+    try {
+      const token = typeof window !== 'undefined' ? localStorage.getItem('idToken') : null;
+      await fetch(`/api/sessions/${sessionId}/puzzle`, { 
+        method: "POST", 
+        headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) }, 
+        body: JSON.stringify({ setPrice: p }) 
+      });
+    } catch (error) {
+      console.error('Error updating price:', error);
+      alert('Failed to update price. Please try again.');
+    } finally {
+      setIsUpdatingPrice(false);
+    }
   }
 
   async function startRound() {
-    if (!sessionId) return;
-    const token = typeof window !== 'undefined' ? localStorage.getItem('idToken') : null;
-    await fetch(`/api/sessions/${sessionId}/puzzle`, { method: "POST", headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) }, body: JSON.stringify({ startRound: true }) });
+    if (!sessionId || isStartingRound) return;
+    
+    setIsStartingRound(true);
+    try {
+      const token = typeof window !== 'undefined' ? localStorage.getItem('idToken') : null;
+      await fetch(`/api/sessions/${sessionId}/puzzle`, { 
+        method: "POST", 
+        headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) }, 
+        body: JSON.stringify({ startRound: true }) 
+      });
+    } catch (error) {
+      console.error('Error starting round:', error);
+      alert('Failed to start round. Please try again.');
+    } finally {
+      setIsStartingRound(false);
+    }
   }
 
   async function endRound() {
-    if (!sessionId) return;
+    if (!sessionId || isEndingRound) return;
     const p = Number(price);
     if (!Number.isFinite(p)) return;
-    const token = typeof window !== 'undefined' ? localStorage.getItem('idToken') : null;
-    await fetch(`/api/sessions/${sessionId}/puzzle`, { method: "POST", headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) }, body: JSON.stringify({ endRound: true, executionPrice: p }) });
+    
+    setIsEndingRound(true);
+    try {
+      const token = typeof window !== 'undefined' ? localStorage.getItem('idToken') : null;
+      await fetch(`/api/sessions/${sessionId}/puzzle`, { 
+        method: "POST", 
+        headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) }, 
+        body: JSON.stringify({ endRound: true, executionPrice: p }) 
+      });
+    } catch (error) {
+      console.error('Error ending round:', error);
+      alert('Failed to end round. Please try again.');
+    } finally {
+      setIsEndingRound(false);
+    }
   }
 
   async function toggleIpoRound() {
-    if (!sessionId) return;
-    const token = typeof window !== 'undefined' ? localStorage.getItem('idToken') : null;
+    if (!sessionId || isTogglingIpo) return;
     
     const p = Number(price);
     if (!Number.isFinite(p)) {
@@ -202,29 +353,48 @@ export default function AdminPage() {
       return;
     }
     
-    // Toggle between IPO and regular round
-    const res = await fetch(`/api/sessions/${sessionId}/ipo`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-      body: JSON.stringify({ 
-        toggleIpo: true, 
-        expectedPrice: p
-      }),
-    });
-    const data = await res.json();
-    if (res.ok) {
-      setIsIpoActive(!isIpoActive);
-      const action = isIpoActive ? "converted to regular round" : "converted to IPO round";
-      const tradesMessage = data.trades && data.trades.length > 0 ? ` ${data.trades.length} trades executed.` : "";
-      alert(`Round ${action}! Expected price: $${p}.${tradesMessage}`);
-    } else {
-      alert(data.error);
+    setIsTogglingIpo(true);
+    try {
+      const token = typeof window !== 'undefined' ? localStorage.getItem('idToken') : null;
+      
+      // Toggle between IPO and regular round
+      const res = await fetch(`/api/sessions/${sessionId}/ipo`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        body: JSON.stringify({ 
+          toggleIpo: true, 
+          expectedPrice: p
+        }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setIsIpoActive(!isIpoActive);
+        const action = isIpoActive ? "converted to regular round" : "converted to IPO round";
+        const tradesMessage = data.trades && data.trades.length > 0 ? ` ${data.trades.length} trades executed.` : "";
+        alert(`Round ${action}! Expected price: $${p}.${tradesMessage}`);
+      } else {
+        alert(data.error);
+      }
+    } catch (error) {
+      console.error('Error toggling IPO round:', error);
+      alert('Failed to toggle IPO round. Please try again.');
+    } finally {
+      setIsTogglingIpo(false);
     }
   }
 
   return (
     <div className="max-w-4xl mx-auto py-12 px-4 space-y-6">
-      <h1 className="text-2xl font-semibold">Admin Dashboard</h1>
+      <div className="flex justify-between items-center">
+        <h1 className="text-2xl font-semibold">Admin Dashboard</h1>
+        {/* Connection Status */}
+        <div className="flex items-center gap-2">
+          <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'}`}></div>
+          <span className="text-sm text-muted-foreground">
+            {isConnected ? 'Connected' : 'Disconnected'}
+          </span>
+        </div>
+      </div>
         <Card>
           <CardContent className="pt-6 space-y-4">
             <div className="space-y-2">
@@ -238,7 +408,12 @@ export default function AdminPage() {
                 max="20"
               />
             </div>
-            <Button onClick={createSession}>Create Session</Button>
+            <Button 
+              onClick={createSession} 
+              disabled={isCreatingSession || !adminName || !totalRounds}
+            >
+              {isCreatingSession ? "Creating..." : "Create Session"}
+            </Button>
           </CardContent>
         </Card>
       {roomCode && (
@@ -254,7 +429,13 @@ export default function AdminPage() {
               </div>
             )}
             <div className="flex gap-2">
-              <Button variant="outline" onClick={startSession}>Start</Button>
+              <Button 
+                variant="outline" 
+                onClick={startSession}
+                disabled={isStartingSession}
+              >
+                {isStartingSession ? "Starting..." : "Start"}
+              </Button>
               <Button variant="destructive" onClick={() => {
                 clearAdminState();
                 setAdminName("");
@@ -280,22 +461,35 @@ export default function AdminPage() {
               )}
               <div className="flex items-center gap-2">
                 <Input placeholder="Price" value={price} onChange={(e) => setPrice(e.target.value)} />
-                <Button variant="outline" onClick={setCurrentPrice}>Update Price</Button>
+                <Button 
+                  variant="outline" 
+                  onClick={setCurrentPrice}
+                  disabled={isUpdatingPrice || !price}
+                >
+                  {isUpdatingPrice ? "Updating..." : "Update Price"}
+                </Button>
                 <Button 
                   variant={isIpoActive ? "destructive" : "default"} 
                   onClick={toggleIpoRound}
+                  disabled={isTogglingIpo || !price}
                 >
-                  {isIpoActive ? "Convert to Regular Round" : "Convert to IPO Round"}
+                  {isTogglingIpo ? "Toggling..." : (isIpoActive ? "Convert to Regular Round" : "Convert to IPO Round")}
                 </Button>
               </div>
-              <Button variant="outline" onClick={startRound}>Start Round</Button>
+              <Button 
+                variant="outline" 
+                onClick={startRound}
+                disabled={isStartingRound}
+              >
+                {isStartingRound ? "Starting..." : "Start Round"}
+              </Button>
               <Button 
                 variant="outline" 
                 onClick={endRound}
-                disabled={isIpoActive}
+                disabled={isIpoActive || isEndingRound || !price}
                 title={isIpoActive ? "Cannot end IPO round - use 'Convert to Regular Round' instead" : "End current round"}
               >
-                End Round
+                {isEndingRound ? "Ending..." : "End Round"}
               </Button>
             </div>
           </CardContent>
