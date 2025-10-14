@@ -2,7 +2,11 @@
 // This will be used by the store functions to notify clients of changes
 
 declare global {
-  var io: any;
+  var io: {
+    to: (room: string) => {
+      emit: (event: string, data: unknown) => void;
+    };
+  } | undefined;
 }
 
 export class WebSocketService {
@@ -16,25 +20,28 @@ export class WebSocketService {
   }
 
   // Emit session state update to all clients in a session
-  emitSessionUpdate(sessionId: string, sessionData: any) {
+  emitSessionUpdate(sessionId: string, sessionData: unknown) {
     if (typeof global !== 'undefined' && global.io) {
       global.io.to(`session-${sessionId}`).emit('session-updated', sessionData);
     }
   }
 
   // Emit leaderboard update to all clients in a session
-  emitLeaderboardUpdate(sessionId: string, leaderboardData: any) {
+  emitLeaderboardUpdate(sessionId: string, leaderboardData: unknown) {
     if (typeof global !== 'undefined' && global.io) {
       global.io.to(`session-${sessionId}`).emit('leaderboard-updated', leaderboardData);
     }
   }
 
   // Emit player update to specific user or all clients in session
-  emitPlayerUpdate(sessionId: string, playerData: any, userId?: string) {
+  emitPlayerUpdate(sessionId: string, playerData: unknown, userId?: string) {
     if (typeof global !== 'undefined' && global.io) {
       if (userId) {
         // Emit to specific user (if they have a user-specific room)
-        global.io.to(`session-${sessionId}`).emit('player-updated', { ...playerData, userId });
+        const dataWithUserId = typeof playerData === 'object' && playerData !== null 
+          ? { ...playerData as Record<string, unknown>, userId }
+          : { userId };
+        global.io.to(`session-${sessionId}`).emit('player-updated', dataWithUserId);
       } else {
         // Emit to all clients in session
         global.io.to(`session-${sessionId}`).emit('player-updated', playerData);
@@ -43,42 +50,42 @@ export class WebSocketService {
   }
 
   // Emit order placed event
-  emitOrderPlaced(sessionId: string, orderData: any) {
+  emitOrderPlaced(sessionId: string, orderData: unknown) {
     if (typeof global !== 'undefined' && global.io) {
       global.io.to(`session-${sessionId}`).emit('order-placed', orderData);
     }
   }
 
   // Emit order cancelled event
-  emitOrderCancelled(sessionId: string, orderData: any) {
+  emitOrderCancelled(sessionId: string, orderData: unknown) {
     if (typeof global !== 'undefined' && global.io) {
       global.io.to(`session-${sessionId}`).emit('order-cancelled', orderData);
     }
   }
 
   // Emit trade executed event
-  emitTradeExecuted(sessionId: string, tradeData: any) {
+  emitTradeExecuted(sessionId: string, tradeData: unknown) {
     if (typeof global !== 'undefined' && global.io) {
       global.io.to(`session-${sessionId}`).emit('trade-executed', tradeData);
     }
   }
 
   // Emit round started event
-  emitRoundStarted(sessionId: string, roundData: any) {
+  emitRoundStarted(sessionId: string, roundData: unknown) {
     if (typeof global !== 'undefined' && global.io) {
       global.io.to(`session-${sessionId}`).emit('round-started', roundData);
     }
   }
 
   // Emit round ended event
-  emitRoundEnded(sessionId: string, roundData: any) {
+  emitRoundEnded(sessionId: string, roundData: unknown) {
     if (typeof global !== 'undefined' && global.io) {
       global.io.to(`session-${sessionId}`).emit('round-ended', roundData);
     }
   }
 
   // Emit price update event
-  emitPriceUpdate(sessionId: string, priceData: any) {
+  emitPriceUpdate(sessionId: string, priceData: unknown) {
     if (typeof global !== 'undefined' && global.io) {
       global.io.to(`session-${sessionId}`).emit('price-updated', priceData);
     }

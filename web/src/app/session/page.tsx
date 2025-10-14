@@ -70,7 +70,14 @@ export default function SessionPage() {
   useEffect(() => {
     if (!sessionId) return;
 
-    const handleSessionUpdate = (sessionData: any) => {
+    const handleSessionUpdate = (sessionData: {
+      currentRound?: number;
+      totalRounds?: number;
+      roundStatus?: string;
+      roundEndTime?: number;
+      currentPrice?: number;
+      lastTradedPrice?: number;
+    }) => {
       setState(sessionData);
       
       // Check for IPO round
@@ -89,11 +96,31 @@ export default function SessionPage() {
       }
     };
 
-    const handleLeaderboardUpdate = (leaderboardData: any) => {
+    const handleLeaderboardUpdate = (leaderboardData: unknown[]) => {
       setLeaderboard(leaderboardData);
     };
 
-    const handlePlayerUpdate = (playerData: any) => {
+    const handlePlayerUpdate = (playerData: {
+      userId?: string;
+      player: {
+        id: number;
+        cashBalance: number;
+        sharesHeld: number;
+      };
+      openOrders: Array<{
+        id: number;
+        type: "buy" | "sell";
+        price: number;
+        quantity: number;
+      }>;
+      closedOrders: Array<{
+        id: number;
+        type: "buy" | "sell";
+        price: number;
+        quantity: number;
+        status: string;
+      }>;
+    }) => {
       if (playerData.userId === userId || !playerData.userId) {
         setPlayerView(playerData);
       }

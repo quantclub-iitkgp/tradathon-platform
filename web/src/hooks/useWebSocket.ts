@@ -1,20 +1,100 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { wsManager } from '@/lib/websocket';
 
+// WebSocket event data types
+interface SessionUpdateData {
+  currentRound?: number;
+  totalRounds?: number;
+  roundStatus?: string;
+  roundEndTime?: number;
+  currentPrice?: number;
+  lastTradedPrice?: number;
+}
+
+interface LeaderboardData {
+  userId: string;
+  displayName: string;
+  netWorth: number;
+  cashBalance: number;
+  sharesHeld: number;
+  totalPnL: number;
+}
+
+interface PlayerUpdateData {
+  userId?: string;
+  player: {
+    id: number;
+    cashBalance: number;
+    sharesHeld: number;
+  };
+  openOrders: Array<{
+    id: number;
+    type: "buy" | "sell";
+    price: number;
+    quantity: number;
+  }>;
+  closedOrders: Array<{
+    id: number;
+    type: "buy" | "sell";
+    price: number;
+    quantity: number;
+    status: string;
+  }>;
+}
+
+interface OrderData {
+  id: number;
+  sessionId: string;
+  playerId: number;
+  type: "buy" | "sell";
+  price: number;
+  quantity: number;
+  status: string;
+  roundNumber: number;
+  createdAt: number;
+}
+
+interface TradeData {
+  id: number;
+  sessionId: string;
+  buyOrderId: number;
+  sellOrderId: number;
+  price: number;
+  quantity: number;
+  roundNumber: number;
+  createdAt: number;
+}
+
+interface RoundData {
+  id: number;
+  sessionId: string;
+  roundNumber: number;
+  status: string;
+  startTime: number;
+  endTime: number | null;
+  executionPrice: number | null;
+  orders: unknown[];
+}
+
+interface PriceUpdateData {
+  price: number;
+  timestamp: number;
+}
+
 export interface WebSocketEvents {
-  'session-updated': (data: any) => void;
-  'leaderboard-updated': (data: any) => void;
-  'player-updated': (data: any) => void;
-  'order-placed': (data: any) => void;
-  'order-cancelled': (data: any) => void;
-  'trade-executed': (data: any) => void;
-  'round-started': (data: any) => void;
-  'round-ended': (data: any) => void;
-  'price-updated': (data: any) => void;
+  'session-updated': (data: SessionUpdateData) => void;
+  'leaderboard-updated': (data: LeaderboardData[]) => void;
+  'player-updated': (data: PlayerUpdateData) => void;
+  'order-placed': (data: OrderData) => void;
+  'order-cancelled': (data: OrderData) => void;
+  'trade-executed': (data: TradeData) => void;
+  'round-started': (data: RoundData) => void;
+  'round-ended': (data: RoundData) => void;
+  'price-updated': (data: PriceUpdateData) => void;
 }
 
 export function useWebSocket(sessionId: string | null) {
-  const socketRef = useRef<any>(null);
+  const socketRef = useRef<ReturnType<typeof wsManager.connect> | null>(null);
 
   const connect = useCallback(() => {
     if (!sessionId) return;
@@ -27,7 +107,7 @@ export function useWebSocket(sessionId: string | null) {
     socketRef.current = null;
   }, []);
 
-  const emit = useCallback((event: string, data?: any) => {
+  const emit = useCallback((event: string, data?: unknown) => {
     wsManager.emit(event, data);
   }, []);
 
@@ -35,14 +115,14 @@ export function useWebSocket(sessionId: string | null) {
     event: K,
     callback: WebSocketEvents[K]
   ) => {
-    wsManager.on(event, callback);
+    wsManager.on(event, callback as (...args: unknown[]) => void);
   }, []);
 
   const off = useCallback(<K extends keyof WebSocketEvents>(
     event: K,
     callback?: WebSocketEvents[K]
   ) => {
-    wsManager.off(event, callback);
+    wsManager.off(event, callback as (...args: unknown[]) => void);
   }, []);
 
   useEffect(() => {

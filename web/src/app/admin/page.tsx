@@ -115,7 +115,14 @@ export default function AdminPage() {
   useEffect(() => {
     if (!sessionId) return;
 
-    const handleSessionUpdate = (sessionData: any) => {
+    const handleSessionUpdate = (sessionData: {
+      currentRound?: number;
+      totalRounds?: number;
+      roundStatus?: string;
+      roundEndTime?: number;
+      currentPrice?: number;
+      lastTradedPrice?: number;
+    }) => {
       setIsIpoActive(sessionData.roundStatus === "ipo_active");
       if (sessionData.currentPrice && sessionData.roundStatus === "ipo_active") {
         setPrice(sessionData.currentPrice.toString());

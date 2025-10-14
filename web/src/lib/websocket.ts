@@ -47,23 +47,25 @@ class WebSocketManager {
   }
 
   // Emit events to server
-  emit(event: string, data?: any) {
+  emit(event: string, data?: unknown) {
     if (this.socket) {
       this.socket.emit(event, data);
     }
   }
 
   // Listen to events from server
-  on(event: string, callback: (...args: any[]) => void) {
+  on(event: string, callback: (...args: unknown[]) => void) {
     if (this.socket) {
-      this.socket.on(event, callback);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      this.socket.on(event, callback as (...args: any[]) => void);
     }
   }
 
   // Remove event listener
-  off(event: string, callback?: (...args: any[]) => void) {
+  off(event: string, callback?: (...args: unknown[]) => void) {
     if (this.socket) {
-      this.socket.off(event, callback);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      this.socket.off(event, callback as (...args: any[]) => void);
     }
   }
 }
