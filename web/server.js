@@ -4,7 +4,7 @@ const next = require('next');
 const { Server } = require('socket.io');
 
 const dev = process.env.NODE_ENV !== 'production';
-const hostname = 'localhost';
+const hostname = process.env.HOSTNAME || '0.0.0.0';
 const port = process.env.PORT || 3000;
 
 // Create Next.js app
@@ -27,9 +27,14 @@ app.prepare().then(() => {
   // Create Socket.IO server
   const io = new Server(server, {
     cors: {
-      origin: "*",
-      methods: ["GET", "POST"]
-    }
+      origin: process.env.NODE_ENV === 'production' 
+        ? [process.env.NEXT_PUBLIC_APP_URL || "https://your-domain.com"]
+        : ["http://localhost:3000", "http://127.0.0.1:3000"],
+      methods: ["GET", "POST"],
+      credentials: true
+    },
+    transports: ['websocket', 'polling'],
+    allowEIO3: true
   });
 
   // Store active sessions and their connected clients
@@ -88,8 +93,13 @@ app.prepare().then(() => {
   // Export io instance for use in API routes
   global.io = io;
 
-  server.listen(port, (err) => {
+  server.listen(port, hostname, (err) => {
     if (err) throw err;
     console.log(`> Ready on http://${hostname}:${port}`);
+    console.log(`> WebSocket server running with CORS for:`, 
+      process.env.NODE_ENV === 'production' 
+        ? [process.env.NEXT_PUBLIC_APP_URL || "https://your-domain.com"]
+        : ["http://localhost:3000", "http://127.0.0.1:3000"]
+    );
   });
 });

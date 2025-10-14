@@ -15,17 +15,52 @@ class WebSocketManager {
     }
 
     this.sessionId = sessionId;
-    this.socket = io(process.env.NODE_ENV === 'production' ? '' : 'http://localhost:3000', {
-      transports: ['websocket', 'polling']
+    
+    // Determine WebSocket URL based on environment
+    const getWebSocketUrl = () => {
+      if (process.env.NODE_ENV === 'production') {
+        // In production, use the same domain as the app
+        if (typeof window !== 'undefined') {
+          return window.location.origin;
+        }
+        return process.env.NEXT_PUBLIC_APP_URL || '';
+      }
+      return 'http://localhost:3000';
+    };
+
+    this.socket = io(getWebSocketUrl(), {
+      transports: ['websocket', 'polling'],
+      timeout: 20000,
+      forceNew: true,
+      reconnection: true,
+      reconnectionDelay: 1000,
+      reconnectionAttempts: 5
     });
 
     this.socket.on('connect', () => {
-      console.log('WebSocket connected');
+      console.log('WebSocket connected to:', getWebSocketUrl());
       this.socket?.emit('join-session', sessionId);
     });
 
-    this.socket.on('disconnect', () => {
-      console.log('WebSocket disconnected');
+    this.socket.on('disconnect', (reason) => {
+      console.log('WebSocket disconnected:', reason);
+    });
+
+    this.socket.on('connect_error', (error) => {
+      console.error('WebSocket connection error:', error);
+    });
+
+    this.socket.on('reconnect', (attemptNumber) => {
+      console.log('WebSocket reconnected after', attemptNumber, 'attempts');
+      this.socket?.emit('join-session', sessionId);
+    });
+
+    this.socket.on('reconnect_error', (error) => {
+      console.error('WebSocket reconnection error:', error);
+    });
+
+    this.socket.on('reconnect_failed', () => {
+      console.error('WebSocket reconnection failed');
     });
 
     return this.socket;

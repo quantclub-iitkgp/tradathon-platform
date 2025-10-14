@@ -58,3 +58,4 @@ echo "   • Check AWS_SETUP.md for deployment instructions"
 echo ""
 echo "📊 Database connection details:"
 grep "DATABASE_URL" .env | sed 's/DATABASE_URL=.*@/DATABASE_URL=***@/'
+
