@@ -265,7 +265,7 @@ export default function AdminPage() {
         headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
          body: JSON.stringify({ 
            adminDisplayName: adminName, 
-           startingCash: 10000, 
+           startingCash: 1000, 
            maxShares: 5, 
            sessionDurationSec: 600,
            totalRounds: Number(totalRounds),

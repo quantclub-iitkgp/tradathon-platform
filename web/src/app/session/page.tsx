@@ -319,7 +319,7 @@ export default function SessionPage() {
             <div className="space-y-1">
               {Array.isArray(leaderboard) && leaderboard.length > 0 ? (
                 leaderboard.map((e: unknown) => {
-                  const entry = e as { userId: string; displayName: string; totalPnL?: number; netWorth: number; sharesHeld: number };
+                  const entry = e as { userId: string; displayName: string; totalPnL?: number; netWorth: number; cashBalance: number; sharesHeld: number };
                   return (
                   <div key={entry.userId} className="flex justify-between border px-2 py-1 rounded">
                     <div>
@@ -329,7 +329,7 @@ export default function SessionPage() {
                       </div>
                     </div>
                     <div className="text-right">
-                      <div>${entry.netWorth.toFixed(2)}</div>
+                      <div>${entry.cashBalance.toFixed(2)}</div>
                       <div className="text-xs text-muted-foreground">
                         {entry.sharesHeld} shares
                       </div>
